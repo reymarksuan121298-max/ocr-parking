@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, View } from "react-native";
-import { ActivityIndicator, Button, Chip, Text } from "react-native-paper";
+import { Animated, Easing, Image, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Button, Chip, Dialog, Portal, Surface, Text } from "react-native-paper";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import {
   Camera,
@@ -10,12 +10,14 @@ import {
 import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { GuardStackParamList } from "@/navigation/RootNavigator";
-import { recognizePlate } from "@/lib/ocr";
+import { recognizePlate, type OcrResult } from "@/lib/ocr";
 import { cropPlateImage } from "@/lib/cropPlate";
 import { Palette } from "@/theme/colors";
+import { StatusPill } from "@/components/StatusPill";
 
 import { useVehicleByPlate } from "@/hooks/useVehicleByPlate";
 import { useParkingRecords } from "@/hooks/useParkingRecords";
+import type { Vehicle } from "@/types/database";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "Scan">;
 
@@ -29,8 +31,16 @@ export default function ScanScreen({ navigation }: Props) {
   const [statusMessage, setStatusMessage] = useState<string>("ALIGN VEHICLE / PLATE IN VIEW");
   const isScanningRef = useRef(false);
 
+  // Modal State for Scanned Plate
+  const [modalVisible, setModalVisible] = useState(false);
+  const [scannedPlate, setScannedPlate] = useState<string>("");
+  const [scannedPhotoUri, setScannedPhotoUri] = useState<string | null>(null);
+  const [scannedOcrResult, setScannedOcrResult] = useState<OcrResult | null>(null);
+  const [matchedVehicle, setMatchedVehicle] = useState<Vehicle | null>(null);
+  const [loggingAction, setLoggingAction] = useState<"entry" | "exit" | null>(null);
+
   const { findVehicleByPlate } = useVehicleByPlate();
-  const { logEntryOrExit } = useParkingRecords();
+  const { logEntryOrExit, submitting } = useParkingRecords();
 
   // High-Tech Scanning Laser Animation
   const laserAnim = useRef(new Animated.Value(0)).current;
@@ -52,52 +62,41 @@ export default function ScanScreen({ navigation }: Props) {
         }),
       ])
     );
-    if (isFocused) {
+    if (isFocused && !modalVisible) {
       scanLoop.start();
     } else {
       scanLoop.stop();
     }
     return () => scanLoop.stop();
-  }, [isFocused]);
+  }, [isFocused, modalVisible]);
 
   useEffect(() => {
     if (!hasPermission) requestPermission();
   }, [hasPermission, requestPermission]);
 
-  // Process and Auto-Log plate if found in database
-  const processCapturedPlate = async (photoUri: string) => {
-    const ocrResult = await recognizePlate(photoUri);
+  // Handle scanned plate -> open pop-up modal
+  const handleScannedPlate = async (photoUri: string, ocrResult: OcrResult) => {
     if (!ocrResult.candidatePlate) return;
 
     setStatusMessage(`DETECTED: ${ocrResult.candidatePlate}`);
     const croppedUri = await cropPlateImage(photoUri, ocrResult.frame);
 
-    // Look up plate in database
+    setScannedPlate(ocrResult.candidatePlate);
+    setScannedPhotoUri(croppedUri);
+    setScannedOcrResult(ocrResult);
+
+    // Look up in database
     const vehicle = await findVehicleByPlate(ocrResult.candidatePlate);
-
-    if (vehicle) {
-      // Vehicle found! Auto-log entry or exit immediately
-      const actionLabel = vehicle.status === "Parked" ? "EXIT" : "ENTRY";
-      setStatusMessage(`LOGGING ${actionLabel}: ${vehicle.plate_number}...`);
-      const logResult = await logEntryOrExit(vehicle, croppedUri);
-      if (logResult) {
-        setStatusMessage(`LOGGED ${actionLabel.toUpperCase()}: ${vehicle.plate_number}`);
-        // Navigate to LiveStatus or Confirm summary
-        navigation.navigate("LiveStatus");
-        return;
-      }
-    }
-
-    // If vehicle not found in database or low confidence, navigate to confirm/register screen
-    navigation.navigate("ConfirmPlate", { photoUri: croppedUri, ocrResult });
+    setMatchedVehicle(vehicle);
+    setModalVisible(true);
   };
 
-  // Periodic Auto-Scan loop
+  // Periodic Auto-Scan loop (paused when modal is open)
   useEffect(() => {
-    if (!isFocused || !autoScanEnabled || !hasPermission || !device) return;
+    if (!isFocused || !autoScanEnabled || !hasPermission || !device || modalVisible) return;
 
     const intervalId = setInterval(async () => {
-      if (isScanningRef.current || !camera.current || !isFocused) return;
+      if (isScanningRef.current || !camera.current || !isFocused || modalVisible) return;
       isScanningRef.current = true;
       try {
         const photo = await camera.current.takePhoto({ flash: "off" });
@@ -105,23 +104,8 @@ export default function ScanScreen({ navigation }: Props) {
         const ocrResult = await recognizePlate(photoUri);
 
         if (ocrResult.candidatePlate && ocrResult.confidence === "high") {
-          setStatusMessage(`LOCK ACQUIRED: ${ocrResult.candidatePlate}`);
           clearInterval(intervalId);
-
-          const croppedUri = await cropPlateImage(photoUri, ocrResult.frame);
-          const vehicle = await findVehicleByPlate(ocrResult.candidatePlate);
-
-          if (vehicle) {
-            const actionLabel = vehicle.status === "Parked" ? "EXIT" : "ENTRY";
-            setStatusMessage(`AUTO-LOGGING ${actionLabel}: ${vehicle.plate_number}...`);
-            const logResult = await logEntryOrExit(vehicle, croppedUri);
-            if (logResult) {
-              navigation.navigate("LiveStatus");
-              return;
-            }
-          }
-
-          navigation.navigate("ConfirmPlate", { photoUri: croppedUri, ocrResult });
+          await handleScannedPlate(photoUri, ocrResult);
         } else {
           setStatusMessage("ALIGN VEHICLE / PLATE IN VIEW");
         }
@@ -135,21 +119,51 @@ export default function ScanScreen({ navigation }: Props) {
     return () => {
       clearInterval(intervalId);
     };
-  }, [isFocused, autoScanEnabled, hasPermission, device, navigation, findVehicleByPlate, logEntryOrExit]);
+  }, [isFocused, autoScanEnabled, hasPermission, device, modalVisible, findVehicleByPlate]);
 
   // Manual Capture button
   async function handleManualCapture() {
-    if (!camera.current || processing) return;
+    if (!camera.current || processing || modalVisible) return;
     setProcessing(true);
     setStatusMessage("ANALYZING TARGET...");
     try {
       const photo = await camera.current.takePhoto({ flash: "auto" });
       const photoUri = `file://${photo.path}`;
-      await processCapturedPlate(photoUri);
+      const ocrResult = await recognizePlate(photoUri);
+      await handleScannedPlate(photoUri, ocrResult);
     } catch (err) {
       setStatusMessage("SCAN FAILED. RETRY.");
     } finally {
       setProcessing(false);
+    }
+  }
+
+  // Commit Log from Modal
+  async function handleCommitLog(targetVehicle: Vehicle, forceAction?: "entry" | "exit") {
+    setLoggingAction(forceAction ?? (targetVehicle.status === "Parked" ? "exit" : "entry"));
+    const result = await logEntryOrExit(targetVehicle, scannedPhotoUri ?? undefined);
+    setLoggingAction(null);
+    if (result) {
+      setModalVisible(false);
+      navigation.navigate("LiveStatus");
+    }
+  }
+
+  function handleDismissModal() {
+    setModalVisible(false);
+    setMatchedVehicle(null);
+    setScannedPhotoUri(null);
+    setScannedOcrResult(null);
+    setStatusMessage("ALIGN VEHICLE / PLATE IN VIEW");
+  }
+
+  function handleNavigateToConfirm() {
+    setModalVisible(false);
+    if (scannedPhotoUri && scannedOcrResult) {
+      navigation.navigate("ConfirmPlate", {
+        photoUri: scannedPhotoUri,
+        ocrResult: scannedOcrResult,
+      });
     }
   }
 
@@ -184,7 +198,7 @@ export default function ScanScreen({ navigation }: Props) {
         ref={camera}
         style={StyleSheet.absoluteFill}
         device={device}
-        isActive={isFocused}
+        isActive={isFocused && !modalVisible}
         photo
       />
 
@@ -275,6 +289,146 @@ export default function ScanScreen({ navigation }: Props) {
           </Button>
         )}
       </View>
+
+      {/* Scanned Plate Action Modal */}
+      <Portal>
+        <Dialog visible={modalVisible} onDismiss={handleDismissModal} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>
+            <View style={styles.dialogHeader}>
+              <MaterialCommunityIcons name="shield-check" size={24} color="#0267D2" />
+              <Text variant="titleLarge" style={styles.dialogHeaderTitle}>
+                Vehicle Identified
+              </Text>
+            </View>
+          </Dialog.Title>
+
+          <Dialog.Content style={{ gap: 14 }}>
+            {/* Cropped Photo */}
+            {scannedPhotoUri && (
+              <Image source={{ uri: scannedPhotoUri }} style={styles.modalPhoto} resizeMode="cover" />
+            )}
+
+            {/* License Plate Display */}
+            <View style={styles.plateBanner}>
+              <Text style={styles.plateBannerLabel}>LICENSE PLATE</Text>
+              <Text style={styles.plateBannerText}>{scannedPlate}</Text>
+            </View>
+
+            {matchedVehicle ? (
+              <View style={styles.vehicleDetailsCard}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Owner:</Text>
+                  <Text style={styles.detailValue}>
+                    {matchedVehicle.owner?.fname} {matchedVehicle.owner?.lname} ({matchedVehicle.owner?.type})
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Vehicle Type:</Text>
+                  <Text style={styles.detailValue}>{matchedVehicle.vehicle_type}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Current Status:</Text>
+                  <StatusPill status={matchedVehicle.status} />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.unregisteredBox}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={24} color="#DC2626" />
+                <Text style={styles.unregisteredText}>
+                  Plate <Text style={{ fontWeight: "800" }}>{scannedPlate}</Text> is not in the registry.
+                </Text>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            {matchedVehicle ? (
+              <View style={{ gap: 10, marginTop: 6 }}>
+                {matchedVehicle.status === "Parked" ? (
+                  <>
+                    <Button
+                      mode="contained"
+                      icon="car-arrow-left"
+                      buttonColor="#7C3AED"
+                      loading={submitting && loggingAction === "exit"}
+                      onPress={() => handleCommitLog(matchedVehicle, "exit")}
+                      style={styles.modalActionBtn}
+                      contentStyle={{ paddingVertical: 6 }}
+                    >
+                      LOG AS EXITED (EXIT)
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      icon="car-arrow-right"
+                      textColor="#059669"
+                      loading={submitting && loggingAction === "entry"}
+                      onPress={() => handleCommitLog(matchedVehicle, "entry")}
+                      style={{ borderColor: "#059669" }}
+                    >
+                      Re-log as Parked (Entry)
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      mode="contained"
+                      icon="car-arrow-right"
+                      buttonColor="#059669"
+                      loading={submitting && loggingAction === "entry"}
+                      onPress={() => handleCommitLog(matchedVehicle, "entry")}
+                      style={styles.modalActionBtn}
+                      contentStyle={{ paddingVertical: 6 }}
+                    >
+                      LOG AS PARKED (ENTRY)
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      icon="car-arrow-left"
+                      textColor="#7C3AED"
+                      loading={submitting && loggingAction === "exit"}
+                      onPress={() => handleCommitLog(matchedVehicle, "exit")}
+                      style={{ borderColor: "#7C3AED" }}
+                    >
+                      Log as Exited (Exit)
+                    </Button>
+                  </>
+                )}
+              </View>
+            ) : (
+              <View style={{ gap: 10, marginTop: 6 }}>
+                <Button
+                  mode="contained"
+                  icon="plus-circle"
+                  buttonColor="#16A34A"
+                  onPress={handleNavigateToConfirm}
+                  style={styles.modalActionBtn}
+                  contentStyle={{ paddingVertical: 6 }}
+                >
+                  Register Vehicle & Owner
+                </Button>
+                <Button
+                  mode="contained-tonal"
+                  icon="alert-octagon-outline"
+                  onPress={() => {
+                    setModalVisible(false);
+                    navigation.navigate("Alerts", {
+                      flaggedPlate: scannedPlate,
+                      photoUri: scannedPhotoUri ?? undefined,
+                    });
+                  }}
+                >
+                  Flag as Unregistered Alert
+                </Button>
+              </View>
+            )}
+          </Dialog.Content>
+
+          <Dialog.Actions>
+            <Button textColor="#64748B" onPress={handleDismissModal}>
+              Cancel / Scan Next
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
@@ -486,6 +640,92 @@ const styles = StyleSheet.create({
   buttonContent: {
     paddingHorizontal: 28,
     paddingVertical: 8,
+  },
+  dialog: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  dialogTitle: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  dialogHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dialogHeaderTitle: {
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  modalPhoto: {
+    width: "100%",
+    height: 100,
+    borderRadius: 12,
+    backgroundColor: "#E2E8F0",
+  },
+  plateBanner: {
+    backgroundColor: "#0F172A",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  plateBannerLabel: {
+    color: "#94A3B8",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1.5,
+  },
+  plateBannerText: {
+    color: "#00E5FF",
+    fontSize: 26,
+    fontWeight: "900",
+    letterSpacing: 2,
+    marginTop: 2,
+  },
+  vehicleDetailsCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 6,
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  detailLabel: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  detailValue: {
+    color: "#0F172A",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  unregisteredBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  unregisteredText: {
+    color: "#991B1B",
+    fontSize: 13,
+    flex: 1,
+  },
+  modalActionBtn: {
+    borderRadius: 10,
   },
 });
 
