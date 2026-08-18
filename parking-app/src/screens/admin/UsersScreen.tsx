@@ -195,7 +195,7 @@ export default function UsersScreen() {
         ItemSeparatorComponent={List.Item}
       />
 
-      <FAB icon="plus" style={styles.fab} onPress={openCreate} label="Add Account" />
+      <FAB icon="plus" color="#FFFFFF" style={styles.fab} onPress={openCreate} />
 
       <Portal>
         <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)} style={styles.dialog}>
@@ -307,7 +307,22 @@ export default function UsersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
-  fab: { position: "absolute", right: 16, bottom: 16, backgroundColor: "#0267D2" },
+  fab: {
+    position: "absolute",
+    right: 20,
+    bottom: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0267D2",
+    elevation: 5,
+    shadowColor: "#0267D2",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
   dialog: { backgroundColor: "#FFFFFF", borderRadius: 16 },
   dialogTitle: { fontWeight: "800", color: "#0B192C" },
 });
