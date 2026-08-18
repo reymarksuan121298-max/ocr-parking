@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
-import { Card, Text } from "react-native-paper";
+import { Card, Surface, Text } from "react-native-paper";
+import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "@/lib/supabase";
 
 interface Stats {
@@ -47,34 +48,75 @@ export default function DashboardScreen() {
     loadStats();
   }, []);
 
-  const cards: { label: string; value: number | undefined; color: string }[] = [
-    { label: "Currently Parked", value: stats?.parkedNow, color: "#166534" },
-    { label: "Entries Today", value: stats?.entriesToday, color: "#1D4ED8" },
-    { label: "Exits Today", value: stats?.exitsToday, color: "#7C3AED" },
-    { label: "Registered Vehicles", value: stats?.registeredVehicles, color: "#B45309" },
+  const cards = [
+    {
+      label: "Currently Parked",
+      value: stats?.parkedNow,
+      color: "#059669",
+      bgColor: "#ECFDF5",
+      icon: "car-clock",
+      desc: "Live vehicles on campus",
+    },
+    {
+      label: "Entries Today",
+      value: stats?.entriesToday,
+      color: "#2563EB",
+      bgColor: "#EFF6FF",
+      icon: "car-arrow-right",
+      desc: "Total recorded check-ins",
+    },
+    {
+      label: "Exits Today",
+      value: stats?.exitsToday,
+      color: "#7C3AED",
+      bgColor: "#F5F3FF",
+      icon: "car-arrow-left",
+      desc: "Total departed vehicles",
+    },
+    {
+      label: "Registered Vehicles",
+      value: stats?.registeredVehicles,
+      color: "#D97706",
+      bgColor: "#FFFBEB",
+      icon: "shield-car",
+      desc: "Total enrolled in system",
+    },
   ];
 
   return (
     <ScrollView
+      style={styles.screen}
       contentContainerStyle={styles.container}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={loadStats} />}
+      refreshControl={<RefreshControl refreshing={loading} onRefresh={loadStats} colors={["#2563EB"]} />}
+      showsVerticalScrollIndicator={false}
     >
-      <Text variant="titleLarge" style={styles.title}>
-        Admin Dashboard
-      </Text>
+      <View style={styles.header}>
+        <Text variant="headlineSmall" style={styles.title}>
+          System Overview
+        </Text>
+        <Text variant="bodyMedium" style={styles.subtitle}>
+          Real-time activity & parking metrics
+        </Text>
+      </View>
 
       <View style={styles.grid}>
         {cards.map((c) => (
-          <Card key={c.label} style={styles.card} mode="contained">
-            <Card.Content>
-              <Text variant="displaySmall" style={[styles.value, { color: c.color }]}>
-                {c.value ?? "—"}
-              </Text>
-              <Text variant="bodyMedium" style={styles.label}>
-                {c.label}
-              </Text>
-            </Card.Content>
-          </Card>
+          <Surface key={c.label} style={styles.card} elevation={1}>
+            <View style={styles.cardTop}>
+              <View style={[styles.iconWrapper, { backgroundColor: c.bgColor }]}>
+                <MaterialCommunityIcons name={c.icon as any} size={24} color={c.color} />
+              </View>
+            </View>
+            <Text variant="displaySmall" style={[styles.value, { color: c.color }]}>
+              {c.value !== undefined ? c.value : "—"}
+            </Text>
+            <Text variant="titleSmall" style={styles.label}>
+              {c.label}
+            </Text>
+            <Text variant="bodySmall" style={styles.desc}>
+              {c.desc}
+            </Text>
+          </Surface>
         ))}
       </View>
     </ScrollView>
@@ -82,10 +124,67 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: "#F8FAFC" },
-  title: { fontWeight: "700", marginBottom: 16 },
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12 },
-  card: { width: "47%", marginBottom: 12 },
-  value: { fontWeight: "800" },
-  label: { color: "#64748B", marginTop: 4 },
+  screen: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
+  container: {
+    padding: 20,
+    paddingBottom: 32,
+  },
+  header: {
+    marginBottom: 20,
+  },
+  title: {
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    color: "#64748B",
+    marginTop: 2,
+  },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 16,
+  },
+  card: {
+    width: "48%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  cardTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  iconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  value: {
+    fontWeight: "800",
+    fontSize: 32,
+    lineHeight: 38,
+  },
+  label: {
+    fontWeight: "700",
+    color: "#1E293B",
+    marginTop: 6,
+  },
+  desc: {
+    color: "#94A3B8",
+    marginTop: 2,
+    fontSize: 11,
+  },
 });
+

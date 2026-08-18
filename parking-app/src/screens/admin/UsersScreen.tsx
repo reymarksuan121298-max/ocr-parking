@@ -33,6 +33,7 @@ export default function UsersScreen() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [dialogVisible, setDialogVisible] = useState(false);
   const [editing, setEditing] = useState<AppUser | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { logAction } = useAuditLog();
 
@@ -214,8 +215,17 @@ export default function UsersScreen() {
                       label="Temporary Password"
                       value={field.value}
                       onChangeText={field.onChange}
-                      secureTextEntry
+                      secureTextEntry={!showPassword}
                       mode="outlined"
+                      left={<TextInput.Icon icon="lock-outline" color="#64748B" />}
+                      right={
+                        <TextInput.Icon
+                          icon={showPassword ? "eye-off-outline" : "eye-outline"}
+                          color="#64748B"
+                          onPress={() => setShowPassword((prev) => !prev)}
+                          forceTextInputFocus={false}
+                        />
+                      }
                       error={!!errors.password}
                     />
                   )}

@@ -49,14 +49,41 @@ function GuardScanStack() {
 
 function SignOutButton() {
   const { signOut } = useAuth();
-  return <Button onPress={signOut}>Sign Out</Button>;
+  return (
+    <Button
+      mode="text"
+      textColor="#EF4444"
+      icon="logout"
+      onPress={signOut}
+      compact
+      style={{ marginRight: 8 }}
+    >
+      Logout
+    </Button>
+  );
 }
 
 function GuardNavigator() {
   return (
     <GuardTabs.Navigator
       screenOptions={({ route }) => ({
+        headerStyle: { backgroundColor: "#FFFFFF" },
+        headerTitleStyle: { fontWeight: "800", color: "#0F172A", fontSize: 18 },
+        headerShadowVisible: false,
         headerRight: () => <SignOutButton />,
+        tabBarActiveTintColor: "#0267D2",
+        tabBarInactiveTintColor: "#94A3B8",
+        tabBarStyle: {
+          backgroundColor: "#FFFFFF",
+          borderTopColor: "#E2E8F0",
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 6,
+        },
+        tabBarLabelStyle: {
+          fontWeight: "600",
+          fontSize: 12,
+        },
         tabBarIcon: ({ color, size }) => {
           const icons: Record<string, string> = {
             ScanTab: "camera-outline",
@@ -84,7 +111,23 @@ function AdminNavigator() {
   return (
     <AdminTabs.Navigator
       screenOptions={({ route }) => ({
+        headerStyle: { backgroundColor: "#FFFFFF" },
+        headerTitleStyle: { fontWeight: "800", color: "#0F172A", fontSize: 18 },
+        headerShadowVisible: false,
         headerRight: () => <SignOutButton />,
+        tabBarActiveTintColor: "#0267D2",
+        tabBarInactiveTintColor: "#94A3B8",
+        tabBarStyle: {
+          backgroundColor: "#FFFFFF",
+          borderTopColor: "#E2E8F0",
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 6,
+        },
+        tabBarLabelStyle: {
+          fontWeight: "600",
+          fontSize: 11,
+        },
         tabBarIcon: ({ color, size }) => {
           const icons: Record<string, string> = {
             Dashboard: "view-dashboard-outline",
