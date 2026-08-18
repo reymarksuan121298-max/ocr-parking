@@ -59,6 +59,19 @@ export default function OwnersScreen() {
 
   useEffect(() => {
     loadOwners();
+
+    const channel = supabase
+      .channel("owners_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicle_owners" },
+        () => loadOwners()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   function openCreate() {

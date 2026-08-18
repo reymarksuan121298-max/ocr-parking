@@ -141,6 +141,9 @@ create policy "plate_images_authenticated_write" on storage.objects
 -- ── Enable Realtime on live-changing tables ─────────────
 alter publication supabase_realtime add table public.parking_records;
 alter publication supabase_realtime add table public.vehicles;
+alter publication supabase_realtime add table public.vehicle_owners;
+alter publication supabase_realtime add table public.users;
+alter publication supabase_realtime add table public.logs;
 
 -- ── Sample Admin User (For local testing only) ──────────
 -- Email: admin@test.com

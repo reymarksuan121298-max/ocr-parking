@@ -76,6 +76,24 @@ export default function RecordsScreen() {
 
   useEffect(() => {
     loadData();
+
+    const channel = supabase
+      .channel(`records_realtime_${filter}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "parking_records" },
+        () => loadData()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicles" },
+        () => loadData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [filter]);
 
   function openCreate() {

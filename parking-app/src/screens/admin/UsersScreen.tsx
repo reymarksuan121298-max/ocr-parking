@@ -54,6 +54,19 @@ export default function UsersScreen() {
 
   useEffect(() => {
     loadUsers();
+
+    const channel = supabase
+      .channel("users_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "users" },
+        () => loadUsers()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   function openCreate() {

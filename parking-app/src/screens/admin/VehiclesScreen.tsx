@@ -53,6 +53,24 @@ export default function VehiclesScreen() {
 
   useEffect(() => {
     loadData();
+
+    const channel = supabase
+      .channel("vehicles_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicles" },
+        () => loadData()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicle_owners" },
+        () => loadData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   function openCreate() {
