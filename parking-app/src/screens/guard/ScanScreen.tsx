@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Animated, Easing, StyleSheet, View } from "react-native";
 import { ActivityIndicator, Button, Chip, Text } from "react-native-paper";
+import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import {
   Camera,
   useCameraDevice,
@@ -10,6 +11,8 @@ import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { GuardStackParamList } from "@/navigation/RootNavigator";
 import { recognizePlate } from "@/lib/ocr";
+import { cropPlateImage } from "@/lib/cropPlate";
+import { Palette } from "@/theme/colors";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "Scan">;
 
@@ -20,8 +23,36 @@ export default function ScanScreen({ navigation }: Props) {
   const { hasPermission, requestPermission } = useCameraPermission();
   const [processing, setProcessing] = useState(false);
   const [autoScanEnabled, setAutoScanEnabled] = useState(true);
-  const [statusMessage, setStatusMessage] = useState<string>("Align license plate in frame");
+  const [statusMessage, setStatusMessage] = useState<string>("ALIGN VEHICLE / PLATE IN VIEW");
   const isScanningRef = useRef(false);
+
+  // High-Tech Scanning Laser Animation
+  const laserAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const scanLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(laserAnim, {
+          toValue: 1,
+          duration: 1800,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(laserAnim, {
+          toValue: 0,
+          duration: 1800,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    if (isFocused) {
+      scanLoop.start();
+    } else {
+      scanLoop.stop();
+    }
+    return () => scanLoop.stop();
+  }, [isFocused]);
 
   useEffect(() => {
     if (!hasPermission) requestPermission();
@@ -39,18 +70,22 @@ export default function ScanScreen({ navigation }: Props) {
         const photoUri = `file://${photo.path}`;
         const ocrResult = await recognizePlate(photoUri);
 
-        // If a valid candidate plate is found with high confidence or matching structure
-        if (ocrResult.candidatePlate && (ocrResult.confidence === "high" || ocrResult.candidatePlate.length >= 6)) {
-          setStatusMessage(`Detected plate: ${ocrResult.candidatePlate}`);
+        if (ocrResult.candidatePlate && ocrResult.confidence === "high") {
+          setStatusMessage(`LOCK ACQUIRED: ${ocrResult.candidatePlate}`);
           clearInterval(intervalId);
-          navigation.navigate("ConfirmPlate", { photoUri, ocrResult });
+
+          // Crop only the plate number area
+          const croppedUri = await cropPlateImage(photoUri, ocrResult.frame);
+          navigation.navigate("ConfirmPlate", { photoUri: croppedUri, ocrResult });
+        } else {
+          setStatusMessage("ALIGN VEHICLE / PLATE IN VIEW");
         }
       } catch (err) {
-        // Silently skip transient capture errors in auto-scan loop
+        // Skip frame
       } finally {
         isScanningRef.current = false;
       }
-    }, 1500);
+    }, 1400);
 
     return () => {
       clearInterval(intervalId);
@@ -61,15 +96,17 @@ export default function ScanScreen({ navigation }: Props) {
   async function handleManualCapture() {
     if (!camera.current || processing) return;
     setProcessing(true);
-    setStatusMessage("Capturing plate...");
+    setStatusMessage("ANALYZING TARGET...");
     try {
       const photo = await camera.current.takePhoto({ flash: "auto" });
       const photoUri = `file://${photo.path}`;
       const ocrResult = await recognizePlate(photoUri);
-      navigation.navigate("ConfirmPlate", { photoUri, ocrResult });
+
+      // Crop plate image
+      const croppedUri = await cropPlateImage(photoUri, ocrResult.frame);
+      navigation.navigate("ConfirmPlate", { photoUri: croppedUri, ocrResult });
     } catch (err) {
-      console.warn("[scan] capture/OCR failed:", err);
-      setStatusMessage("Scan failed. Please try again.");
+      setStatusMessage("SCAN FAILED. RETRY.");
     } finally {
       setProcessing(false);
     }
@@ -78,9 +115,10 @@ export default function ScanScreen({ navigation }: Props) {
   if (!hasPermission) {
     return (
       <View style={styles.center}>
-        <Text>Camera permission is required to scan plates.</Text>
-        <Button mode="contained" onPress={requestPermission} style={{ marginTop: 12 }}>
-          Grant Permission
+        <MaterialCommunityIcons name="camera-off" size={48} color={Palette.danger} />
+        <Text style={{ color: "#0F172A", marginTop: 12, fontWeight: "700" }}>Camera Access Required</Text>
+        <Button mode="contained" onPress={requestPermission} buttonColor={Palette.primary} style={{ marginTop: 16 }}>
+          Grant Camera Permission
         </Button>
       </View>
     );
@@ -89,10 +127,15 @@ export default function ScanScreen({ navigation }: Props) {
   if (!device) {
     return (
       <View style={styles.center}>
-        <Text>No camera device found.</Text>
+        <Text style={{ color: "#0F172A" }}>No camera device found.</Text>
       </View>
     );
   }
+
+  const laserTranslateY = laserAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [10, 170],
+  });
 
   return (
     <View style={styles.container}>
@@ -104,51 +147,90 @@ export default function ScanScreen({ navigation }: Props) {
         photo
       />
 
-      {/* Top Header / Mode Switch */}
+      {/* Top HUD Bar */}
       <View style={styles.topBar}>
-        <Chip
-          icon={autoScanEnabled ? "radar" : "camera-off"}
-          selected={autoScanEnabled}
-          onPress={() => setAutoScanEnabled((prev) => !prev)}
-          style={[styles.modeChip, autoScanEnabled ? styles.activeChip : undefined]}
-          textStyle={{ color: autoScanEnabled ? "#166534" : "#475569" }}
-        >
-          {autoScanEnabled ? "Auto-Scan ON" : "Auto-Scan OFF"}
-        </Chip>
+        <View style={styles.topHeaderCard}>
+          <View style={styles.liveIndicator}>
+            <View style={styles.livePulse} />
+            <Text style={styles.liveLabel}>AI OCR SCANNER</Text>
+          </View>
+          <Chip
+            icon={autoScanEnabled ? "radar" : "pause-circle"}
+            selected={autoScanEnabled}
+            onPress={() => setAutoScanEnabled((prev) => !prev)}
+            style={[styles.modeChip, autoScanEnabled ? styles.activeChip : undefined]}
+            textStyle={{ color: autoScanEnabled ? "#0267D2" : "#64748B", fontSize: 11, fontWeight: "700" }}
+          >
+            {autoScanEnabled ? "AUTO SCAN ACTIVE" : "MANUAL MODE"}
+          </Chip>
+        </View>
       </View>
 
-      {/* Mask Overlay: darkened black outside the cutout frame */}
+      {/* Mask & Facial/Biometric Style Viewfinder */}
       <View style={styles.maskContainer} pointerEvents="none">
         <View style={styles.maskTop} />
         <View style={styles.maskMiddleRow}>
           <View style={styles.maskSide} />
-          <View style={[styles.cutoutFrame, autoScanEnabled && styles.frameActive]}>
+          
+          <View style={styles.reticleContainer}>
+            {/* Outer Biometric Brackets */}
             <View style={[styles.corner, styles.topLeft]} />
             <View style={[styles.corner, styles.topRight]} />
             <View style={[styles.corner, styles.bottomLeft]} />
             <View style={[styles.corner, styles.bottomRight]} />
+
+            {/* Center Crosshairs & AI Facial Mesh Markers */}
+            <View style={styles.centerCrosshair}>
+              <View style={styles.crosshairH} />
+              <View style={styles.crosshairV} />
+            </View>
+
+            {/* Corner Node Dots */}
+            <View style={[styles.nodeDot, { top: 12, left: 12 }]} />
+            <View style={[styles.nodeDot, { top: 12, right: 12 }]} />
+            <View style={[styles.nodeDot, { bottom: 12, left: 12 }]} />
+            <View style={[styles.nodeDot, { bottom: 12, right: 12 }]} />
+
+            {/* Animated Laser Beam */}
+            <Animated.View
+              style={[
+                styles.laserBeam,
+                {
+                  transform: [{ translateY: laserTranslateY }],
+                },
+              ]}
+            >
+              <View style={styles.laserLine} />
+              <View style={styles.laserGlow} />
+            </Animated.View>
           </View>
+
           <View style={styles.maskSide} />
         </View>
+
         <View style={styles.maskBottom}>
-          <Text style={styles.hint}>{statusMessage}</Text>
+          <View style={styles.hudBadge}>
+            <MaterialCommunityIcons name="line-scan" size={16} color="#00E5FF" style={{ marginRight: 6 }} />
+            <Text style={styles.hudText}>{statusMessage}</Text>
+          </View>
+          <Text style={styles.hudSub}>Position vehicle plate within recognition brackets</Text>
         </View>
       </View>
 
-      {/* Bottom Controls */}
+      {/* Bottom Action Controls */}
       <View style={styles.controls}>
         {processing ? (
-          <ActivityIndicator animating size="large" color="#fff" />
+          <ActivityIndicator animating size="large" color="#00E5FF" />
         ) : (
           <Button
             mode="contained"
-            icon="camera"
+            icon="camera-iris"
             onPress={handleManualCapture}
             style={styles.captureButton}
-            contentStyle={{ paddingHorizontal: 24, paddingVertical: 6 }}
-            buttonColor="#2563EB"
+            contentStyle={styles.buttonContent}
+            buttonColor="#0267D2"
           >
-            Capture Plate
+            CAPTURE & ANALYZE
           </Button>
         )}
       </View>
@@ -157,111 +239,213 @@ export default function ScanScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "black" },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
+  container: { flex: 1, backgroundColor: "#000" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24, backgroundColor: "#F8FAFC" },
   topBar: {
     position: "absolute",
-    top: 50,
+    top: 48,
     width: "100%",
-    alignItems: "center",
+    paddingHorizontal: 20,
     zIndex: 10,
   },
+  topHeaderCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "rgba(11, 25, 44, 0.85)",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: "rgba(2, 103, 210, 0.4)",
+  },
+  liveIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  livePulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#00E5FF",
+    marginRight: 8,
+  },
+  liveLabel: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
   modeChip: {
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    height: 30,
   },
   activeChip: {
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "rgba(2, 103, 210, 0.25)",
+    borderColor: "#0267D2",
+    borderWidth: 1,
   },
-  // Mask layout covering outside of cutout
+  // Mask & Targeting Overlay
   maskContainer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 5,
   },
   maskTop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    backgroundColor: "rgba(11, 25, 44, 0.65)",
   },
   maskMiddleRow: {
-    height: 150,
+    height: 190,
     flexDirection: "row",
   },
   maskSide: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    backgroundColor: "rgba(11, 25, 44, 0.65)",
   },
-  cutoutFrame: {
-    width: 290,
-    height: 150,
-    borderWidth: 2,
-    borderColor: "#94A3B8",
-    borderRadius: 14,
-    backgroundColor: "transparent",
+  reticleContainer: {
+    width: 300,
+    height: 190,
     position: "relative",
+    backgroundColor: "rgba(2, 103, 210, 0.04)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 255, 0.2)",
+    overflow: "hidden",
   },
-  frameActive: {
-    borderColor: "#22C55E",
-    borderWidth: 2.5,
-  },
+  // Recognition Corners (HUD style)
   corner: {
     position: "absolute",
-    width: 18,
-    height: 18,
-    borderColor: "#22C55E",
+    width: 24,
+    height: 24,
+    borderColor: "#00E5FF",
   },
   topLeft: {
-    top: -2,
-    left: -2,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
-    borderTopLeftRadius: 12,
+    top: 0,
+    left: 0,
+    borderTopWidth: 3.5,
+    borderLeftWidth: 3.5,
+    borderTopLeftRadius: 16,
   },
   topRight: {
-    top: -2,
-    right: -2,
-    borderTopWidth: 4,
-    borderRightWidth: 4,
-    borderTopRightRadius: 12,
+    top: 0,
+    right: 0,
+    borderTopWidth: 3.5,
+    borderRightWidth: 3.5,
+    borderTopRightRadius: 16,
   },
   bottomLeft: {
-    bottom: -2,
-    left: -2,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
-    borderBottomLeftRadius: 12,
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 3.5,
+    borderLeftWidth: 3.5,
+    borderBottomLeftRadius: 16,
   },
   bottomRight: {
-    bottom: -2,
-    right: -2,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomRightRadius: 12,
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 3.5,
+    borderRightWidth: 3.5,
+    borderBottomRightRadius: 16,
+  },
+  centerCrosshair: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    width: 20,
+    height: 20,
+    transform: [{ translateX: -10 }, { translateY: -10 }],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  crosshairH: {
+    position: "absolute",
+    width: 14,
+    height: 1.5,
+    backgroundColor: "rgba(0, 229, 255, 0.5)",
+  },
+  crosshairV: {
+    position: "absolute",
+    width: 1.5,
+    height: 14,
+    backgroundColor: "rgba(0, 229, 255, 0.5)",
+  },
+  nodeDot: {
+    position: "absolute",
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#00E5FF",
+  },
+  laserBeam: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 20,
+    justifyContent: "center",
+  },
+  laserLine: {
+    height: 2,
+    backgroundColor: "#00E5FF",
+    shadowColor: "#00E5FF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+  },
+  laserGlow: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: -4,
+    bottom: -4,
+    backgroundColor: "rgba(0, 229, 255, 0.15)",
   },
   maskBottom: {
-    flex: 1.4,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    flex: 1.3,
+    backgroundColor: "rgba(11, 25, 44, 0.65)",
     alignItems: "center",
-    paddingTop: 18,
+    paddingTop: 24,
   },
-  hint: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "600",
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
+  hudBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(11, 25, 44, 0.9)",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0, 229, 255, 0.3)",
+  },
+  hudText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+  hudSub: {
+    color: "rgba(255, 255, 255, 0.6)",
+    fontSize: 12,
+    marginTop: 8,
   },
   controls: {
     position: "absolute",
-    bottom: 40,
+    bottom: 36,
     width: "100%",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     zIndex: 10,
   },
   captureButton: {
     borderRadius: 28,
+    elevation: 4,
+    shadowColor: "#0267D2",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+  },
+  buttonContent: {
+    paddingHorizontal: 28,
+    paddingVertical: 8,
   },
 });
+
 

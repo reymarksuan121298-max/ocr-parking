@@ -46,6 +46,24 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     loadStats();
+
+    const channel = supabase
+      .channel("dashboard_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "parking_records" },
+        () => loadStats()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicles" },
+        () => loadStats()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const cards = [

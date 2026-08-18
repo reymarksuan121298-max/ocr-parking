@@ -22,6 +22,19 @@ export default function LogsScreen() {
 
   useEffect(() => {
     loadLogs();
+
+    const channel = supabase
+      .channel("logs_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "logs" },
+        () => loadLogs()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (

@@ -52,7 +52,7 @@ export default function ReportsScreen() {
             data={entryData.map((d) => ({ value: d.value, label: d.label }))}
             barWidth={28}
             barBorderRadius={6}
-            frontColor="#2563EB"
+            frontColor="#0267D2"
             yAxisThickness={0}
             xAxisThickness={1}
             noOfSections={4}
@@ -71,8 +71,14 @@ export default function ReportsScreen() {
 
 const styles = StyleSheet.create({
   container: { padding: 16, backgroundColor: "#F8FAFC" },
-  title: { fontWeight: "700" },
+  title: { fontWeight: "800", color: "#0F172A" },
   subtitle: { color: "#64748B", marginTop: 2, marginBottom: 16 },
-  chartWrap: { backgroundColor: "white", borderRadius: 12, padding: 16 },
+  chartWrap: {
+    backgroundColor: "white",
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
   note: { marginTop: 20, color: "#94A3B8" },
 });

@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
-import { Button, Dialog, FAB, IconButton, List, Menu, Portal, Text, TextInput } from "react-native-paper";
+import { Button, Dialog, FAB, IconButton, List, Portal, Text, TextInput } from "react-native-paper";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { StatusPill } from "@/components/StatusPill";
+import { VEHICLE_TYPES } from "@/constants/vehicleTypes";
 import type { Vehicle, VehicleOwner } from "@/types/database";
 
 const vehicleSchema = z.object({
   plate_number: z.string().min(3, "Plate number is required"),
   owner_id: z.string().min(1, "Select an owner"),
-  vehicle_type: z.string().min(1, "Vehicle type is required"),
+  vehicle_type: z.string().min(1, "Select a vehicle type"),
 });
 type VehicleForm = z.infer<typeof vehicleSchema>;
 
@@ -22,6 +23,7 @@ export default function VehiclesScreen() {
   const [dialogVisible, setDialogVisible] = useState(false);
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [ownerSelectVisible, setOwnerSelectVisible] = useState(false);
+  const [typeSelectVisible, setTypeSelectVisible] = useState(false);
   const { logAction } = useAuditLog();
 
   const {
@@ -33,11 +35,12 @@ export default function VehiclesScreen() {
     formState: { errors },
   } = useForm<VehicleForm>({
     resolver: zodResolver(vehicleSchema),
-    defaultValues: { plate_number: "", owner_id: "", vehicle_type: "" },
+    defaultValues: { plate_number: "", owner_id: "", vehicle_type: "CAR" },
   });
 
   const selectedOwnerId = watch("owner_id");
   const selectedOwner = owners.find((o) => o.owner_id === selectedOwnerId);
+  const selectedType = watch("vehicle_type");
 
   async function loadData() {
     const [{ data: v }, { data: o }] = await Promise.all([
@@ -50,11 +53,29 @@ export default function VehiclesScreen() {
 
   useEffect(() => {
     loadData();
+
+    const channel = supabase
+      .channel("vehicles_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicles" },
+        () => loadData()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicle_owners" },
+        () => loadData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   function openCreate() {
     setEditing(null);
-    reset({ plate_number: "", owner_id: "", vehicle_type: "" });
+    reset({ plate_number: "", owner_id: "", vehicle_type: "CAR" });
     setDialogVisible(true);
   }
 
@@ -69,27 +90,38 @@ export default function VehiclesScreen() {
   }
 
   async function onSubmit(values: VehicleForm) {
-    const payload = { ...values, plate_number: values.plate_number.toUpperCase() };
     if (editing) {
       const { error } = await (supabase
         .from("vehicles") as any)
-        .update(payload)
+        .update({
+          plate_number: values.plate_number.trim(),
+          owner_id: values.owner_id,
+          vehicle_type: values.vehicle_type,
+        })
         .eq("vehicle_id", editing.vehicle_id);
-      if (!error) await logAction("Update Vehicle", `Updated vehicle ${payload.plate_number}`);
+      if (!error) {
+        await logAction("Update Vehicle", `Updated vehicle ${values.plate_number}`);
+      }
     } else {
-      const { error } = await (supabase
-        .from("vehicles") as any)
-        .insert({ ...payload, status: "Outside" });
-      if (!error) await logAction("Register Vehicle", `Registered vehicle ${payload.plate_number}`);
+      const { error } = await (supabase.from("vehicles") as any).insert({
+        plate_number: values.plate_number.trim(),
+        owner_id: values.owner_id,
+        vehicle_type: values.vehicle_type,
+      });
+      if (!error) {
+        await logAction("Register Vehicle", `Registered vehicle ${values.plate_number}`);
+      }
     }
     setDialogVisible(false);
     loadData();
   }
 
-  async function handleDelete(vehicle: Vehicle) {
-    const { error } = await supabase.from("vehicles").delete().eq("vehicle_id", vehicle.vehicle_id);
+  async function handleDelete() {
+    if (!editing) return;
+    const { error } = await supabase.from("vehicles").delete().eq("vehicle_id", editing.vehicle_id);
     if (!error) {
-      await logAction("Delete Vehicle", `Removed vehicle ${vehicle.plate_number}`);
+      await logAction("Delete Vehicle", `Deleted vehicle ${editing.plate_number}`);
+      setDialogVisible(false);
       loadData();
     }
   }
@@ -103,25 +135,23 @@ export default function VehiclesScreen() {
           <List.Item
             title={item.plate_number}
             description={`${item.vehicle_type}${item.owner ? " · " + item.owner.fname + " " + item.owner.lname : ""}`}
-            onPress={() => openEdit(item)}
-            left={() => (
+            left={(props) => <List.Icon {...props} icon="car" />}
+            right={() => (
               <View style={styles.pillWrap}>
                 <StatusPill status={item.status} />
               </View>
             )}
-            right={(props) => (
-              <IconButton icon="delete-outline" iconColor={props.color} onPress={() => handleDelete(item)} />
-            )}
+            onPress={() => openEdit(item)}
           />
         )}
       />
 
-      <FAB icon="plus" style={styles.fab} onPress={openCreate} label="Add Vehicle" />
+      <FAB icon="plus" style={styles.fab} onPress={openCreate} label="Register Vehicle" />
 
       <Portal>
-        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)}>
-          <Dialog.Title>{editing ? "Edit Vehicle" : "Register Vehicle"}</Dialog.Title>
-          <Dialog.Content style={{ gap: 10 }}>
+        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>{editing ? "Edit Vehicle" : "Register Vehicle"}</Dialog.Title>
+          <Dialog.Content style={{ gap: 12 }}>
             <Controller
               control={control}
               name="plate_number"
@@ -132,39 +162,90 @@ export default function VehiclesScreen() {
                   onChangeText={(t) => field.onChange(t.toUpperCase())}
                   autoCapitalize="characters"
                   mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0267D2"
                   error={!!errors.plate_number}
                 />
               )}
             />
-            <Controller
-              control={control}
-              name="vehicle_type"
-              render={({ field }) => (
-                <TextInput
-                  label="Vehicle Type (Car, Motorcycle, Van...)"
-                  value={field.value}
-                  onChangeText={field.onChange}
-                  mode="outlined"
-                  error={!!errors.vehicle_type}
-                />
-              )}
-            />
 
-            <Button mode="outlined" onPress={() => setOwnerSelectVisible(true)}>
-              {selectedOwner
-                ? `${selectedOwner.fname} ${selectedOwner.lname}`
-                : "Select Owner"}
-            </Button>
-            {errors.owner_id && <Text style={{ color: "#DC2626" }}>{errors.owner_id.message}</Text>}
+            <View>
+              <Text variant="bodySmall" style={{ color: "#64748B", marginBottom: 4 }}>Vehicle Type</Text>
+              <Button
+                mode="outlined"
+                icon="menu-down"
+                contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
+                onPress={() => setTypeSelectVisible(true)}
+                textColor="#0F172A"
+                style={styles.pickerButton}
+              >
+                {selectedType || "Select Vehicle Type"}
+              </Button>
+              {errors.vehicle_type && <Text style={{ color: "#DC2626", fontSize: 12, marginTop: 4 }}>{errors.vehicle_type.message}</Text>}
+            </View>
+
+            <View>
+              <Text variant="bodySmall" style={{ color: "#64748B", marginBottom: 4 }}>Vehicle Owner</Text>
+              <Button
+                mode="outlined"
+                icon="account"
+                contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
+                onPress={() => setOwnerSelectVisible(true)}
+                textColor="#0F172A"
+                style={styles.pickerButton}
+              >
+                {selectedOwner
+                  ? `${selectedOwner.fname} ${selectedOwner.lname} (${selectedOwner.type})`
+                  : "Select Owner"}
+              </Button>
+              {errors.owner_id && <Text style={{ color: "#DC2626", fontSize: 12, marginTop: 4 }}>{errors.owner_id.message}</Text>}
+            </View>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDialogVisible(false)}>Cancel</Button>
-            <Button onPress={handleSubmit(onSubmit)}>Save</Button>
+            {editing && (
+              <Button textColor="#DC2626" onPress={handleDelete}>
+                Delete
+              </Button>
+            )}
+            <Button textColor="#64748B" onPress={() => setDialogVisible(false)}>Cancel</Button>
+            <Button mode="contained" buttonColor="#0267D2" onPress={handleSubmit(onSubmit)}>Save</Button>
           </Dialog.Actions>
         </Dialog>
 
-        <Dialog visible={ownerSelectVisible} onDismiss={() => setOwnerSelectVisible(false)}>
-          <Dialog.Title>Select Owner</Dialog.Title>
+        {/* Vehicle Type Picker Dialog */}
+        <Dialog visible={typeSelectVisible} onDismiss={() => setTypeSelectVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Select Vehicle Type</Dialog.Title>
+          <Dialog.ScrollArea style={{ maxHeight: 350, paddingHorizontal: 0 }}>
+            <FlatList
+              data={VEHICLE_TYPES}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <List.Item
+                  title={item}
+                  titleStyle={selectedType === item ? { color: "#0267D2", fontWeight: "700" } : undefined}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={selectedType === item ? "check-circle" : "circle-outline"}
+                      color={selectedType === item ? "#0267D2" : "#94A3B8"}
+                    />
+                  )}
+                  onPress={() => {
+                    setValue("vehicle_type", item);
+                    setTypeSelectVisible(false);
+                  }}
+                />
+              )}
+            />
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button textColor="#0267D2" onPress={() => setTypeSelectVisible(false)}>Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Owner Picker Dialog */}
+        <Dialog visible={ownerSelectVisible} onDismiss={() => setOwnerSelectVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Select Owner</Dialog.Title>
           <Dialog.ScrollArea style={{ maxHeight: 400, paddingHorizontal: 0 }}>
             <FlatList
               data={owners}
@@ -173,6 +254,14 @@ export default function VehiclesScreen() {
                 <List.Item
                   title={`${o.fname} ${o.lname}`}
                   description={o.type}
+                  titleStyle={selectedOwnerId === o.owner_id ? { color: "#0267D2", fontWeight: "700" } : undefined}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={selectedOwnerId === o.owner_id ? "check-circle" : "account-outline"}
+                      color={selectedOwnerId === o.owner_id ? "#0267D2" : "#94A3B8"}
+                    />
+                  )}
                   onPress={() => {
                     setValue("owner_id", o.owner_id);
                     setOwnerSelectVisible(false);
@@ -182,7 +271,7 @@ export default function VehiclesScreen() {
             />
           </Dialog.ScrollArea>
           <Dialog.Actions>
-            <Button onPress={() => setOwnerSelectVisible(false)}>Close</Button>
+            <Button textColor="#0267D2" onPress={() => setOwnerSelectVisible(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -192,6 +281,9 @@ export default function VehiclesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
-  fab: { position: "absolute", right: 16, bottom: 16 },
+  fab: { position: "absolute", right: 16, bottom: 16, backgroundColor: "#0267D2" },
   pillWrap: { justifyContent: "center", paddingLeft: 8 },
+  dialog: { backgroundColor: "#FFFFFF", borderRadius: 16 },
+  dialogTitle: { fontWeight: "800", color: "#0B192C" },
+  pickerButton: { borderColor: "#CBD5E1", borderRadius: 8 },
 });

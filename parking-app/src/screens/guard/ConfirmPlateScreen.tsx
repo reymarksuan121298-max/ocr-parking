@@ -10,6 +10,7 @@ import { useVehicleByPlate } from "@/hooks/useVehicleByPlate";
 import { useParkingRecords } from "@/hooks/useParkingRecords";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { supabase } from "@/lib/supabase";
+import { VEHICLE_TYPES } from "@/constants/vehicleTypes";
 import type { OwnerType, Vehicle, VehicleOwner } from "@/types/database";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "ConfirmPlate">;
@@ -66,8 +67,10 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
 
   // Registration modal states
   const [registerDialogVisible, setRegisterDialogVisible] = useState(false);
-  const [ownerSelectVisible, setOwnerSelectVisible] = useState(false);
   const [existingOwners, setExistingOwners] = useState<VehicleOwner[]>([]);
+  const [ownerSelectVisible, setOwnerSelectVisible] = useState(false);
+  const [typeSelectVisible, setTypeSelectVisible] = useState(false);
+  const [ownerTypePickerVisible, setOwnerTypePickerVisible] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
 
@@ -82,7 +85,7 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
     resolver: zodResolver(registerSchema),
     defaultValues: {
       plate_number: ocrResult.candidatePlate ?? "",
-      vehicle_type: "Motorcycle",
+      vehicle_type: "CAR",
       owner_mode: "new",
       owner_id: "",
       fname: "",
@@ -93,6 +96,8 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
     },
   });
 
+  const selectedVehicleType = watch("vehicle_type");
+  const selectedOwnerType = watch("type");
   const ownerMode = watch("owner_mode");
   const selectedOwnerId = watch("owner_id");
   const selectedOwner = existingOwners.find((o) => o.owner_id === selectedOwnerId);
@@ -255,6 +260,7 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
 
           <Button
             mode="contained"
+            buttonColor="#0267D2"
             onPress={handleConfirmLog}
             loading={submitting}
             style={styles.button}
@@ -297,41 +303,52 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
 
       {/* Registration Dialog */}
       <Portal>
-        <Dialog visible={registerDialogVisible} onDismiss={() => !registering && setRegisterDialogVisible(false)}>
-          <Dialog.Title>Register Vehicle & Owner</Dialog.Title>
-          <Dialog.ScrollArea style={{ maxHeight: 460, paddingHorizontal: 16 }}>
-            <ScrollView contentContainerStyle={{ gap: 10, paddingVertical: 10 }}>
+        <Dialog
+          visible={registerDialogVisible}
+          onDismiss={() => !registering && setRegisterDialogVisible(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>Fast Register Vehicle</Dialog.Title>
+          <Dialog.ScrollArea style={{ maxHeight: 420, paddingHorizontal: 0 }}>
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
               <Controller
                 control={control}
                 name="plate_number"
                 render={({ field }) => (
                   <TextInput
-                    label="Plate Number"
+                    label="Plate Number *"
                     value={field.value}
                     onChangeText={(t) => field.onChange(t.toUpperCase())}
                     autoCapitalize="characters"
                     mode="outlined"
+                    outlineColor="#CBD5E1"
+                    activeOutlineColor="#0267D2"
                     error={!!errors.plate_number}
                   />
                 )}
               />
 
-              <Controller
-                control={control}
-                name="vehicle_type"
-                render={({ field }) => (
-                  <TextInput
-                    label="Vehicle Type (Motorcycle, Car, SUV...)"
-                    value={field.value}
-                    onChangeText={field.onChange}
-                    mode="outlined"
-                    error={!!errors.vehicle_type}
-                  />
+              <View>
+                <Text variant="bodySmall" style={{ color: "#64748B", marginBottom: 4 }}>Vehicle Type</Text>
+                <Button
+                  mode="outlined"
+                  icon="menu-down"
+                  contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
+                  onPress={() => setTypeSelectVisible(true)}
+                  textColor="#0F172A"
+                  style={{ borderColor: "#CBD5E1", borderRadius: 8 }}
+                >
+                  {selectedVehicleType || "Select Vehicle Type"}
+                </Button>
+                {errors.vehicle_type && (
+                  <Text style={{ color: "#DC2626", fontSize: 12, marginTop: 4 }}>
+                    {errors.vehicle_type.message}
+                  </Text>
                 )}
-              />
+              </View>
 
               <Divider style={{ marginVertical: 4 }} />
-              <Text variant="titleSmall" style={{ fontWeight: "700" }}>Vehicle Owner</Text>
+              <Text variant="titleSmall" style={{ fontWeight: "700", color: "#0B192C" }}>Vehicle Owner</Text>
 
               <Controller
                 control={control}
@@ -350,13 +367,20 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
 
               {ownerMode === "existing" ? (
                 <View style={{ marginTop: 4 }}>
-                  <Button mode="outlined" onPress={() => setOwnerSelectVisible(true)}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => setOwnerSelectVisible(true)}
+                    textColor="#0F172A"
+                    style={{ borderColor: "#CBD5E1", borderRadius: 8 }}
+                  >
                     {selectedOwner
                       ? `${selectedOwner.fname} ${selectedOwner.lname} (${selectedOwner.type})`
                       : "Select Existing Owner"}
                   </Button>
                   {errors.owner_id && (
-                    <Text style={{ color: "#DC2626", marginTop: 4 }}>{errors.owner_id.message}</Text>
+                    <Text style={{ color: "#DC2626", marginTop: 4, fontSize: 12 }}>
+                      {errors.owner_id.message}
+                    </Text>
                   )}
                 </View>
               ) : (
@@ -370,6 +394,8 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
                         value={field.value}
                         onChangeText={field.onChange}
                         mode="outlined"
+                        outlineColor="#CBD5E1"
+                        activeOutlineColor="#0267D2"
                         error={!!errors.fname}
                       />
                     )}
@@ -384,6 +410,8 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
                         value={field.value}
                         onChangeText={field.onChange}
                         mode="outlined"
+                        outlineColor="#CBD5E1"
+                        activeOutlineColor="#0267D2"
                       />
                     )}
                   />
@@ -397,6 +425,8 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
                         value={field.value}
                         onChangeText={field.onChange}
                         mode="outlined"
+                        outlineColor="#CBD5E1"
+                        activeOutlineColor="#0267D2"
                         error={!!errors.lname}
                       />
                     )}
@@ -411,28 +441,26 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
                         value={field.value}
                         onChangeText={field.onChange}
                         mode="outlined"
+                        outlineColor="#CBD5E1"
+                        activeOutlineColor="#0267D2"
                         keyboardType="phone-pad"
                       />
                     )}
                   />
 
-                  <Text variant="labelMedium" style={{ marginTop: 4 }}>Owner Category</Text>
-                  <Controller
-                    control={control}
-                    name="type"
-                    render={({ field }) => (
-                      <SegmentedButtons
-                        value={field.value}
-                        onValueChange={(v) => field.onChange(v as OwnerType)}
-                        buttons={[
-                          { value: "Student", label: "Student" },
-                          { value: "Faculty", label: "Faculty" },
-                          { value: "Staff", label: "Staff" },
-                          { value: "Visitor", label: "Visitor" },
-                        ]}
-                      />
-                    )}
-                  />
+                  <View style={{ marginTop: 8 }}>
+                    <Text variant="bodySmall" style={{ color: "#64748B", marginBottom: 4 }}>Owner Category</Text>
+                    <Button
+                      mode="outlined"
+                      icon="menu-down"
+                      contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
+                      onPress={() => setOwnerTypePickerVisible(true)}
+                      textColor="#0F172A"
+                      style={{ borderColor: "#CBD5E1", borderRadius: 8 }}
+                    >
+                      {selectedOwnerType || "Select Category"}
+                    </Button>
+                  </View>
                 </>
               )}
 
@@ -443,11 +471,12 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
           </Dialog.ScrollArea>
 
           <Dialog.Actions>
-            <Button disabled={registering} onPress={() => setRegisterDialogVisible(false)}>
+            <Button textColor="#64748B" disabled={registering} onPress={() => setRegisterDialogVisible(false)}>
               Cancel
             </Button>
             <Button
               mode="contained"
+              buttonColor="#0267D2"
               loading={registering}
               disabled={registering}
               onPress={handleSubmit(onRegisterSubmit)}
@@ -457,9 +486,40 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
           </Dialog.Actions>
         </Dialog>
 
+        {/* Vehicle Type Selector Dialog */}
+        <Dialog visible={typeSelectVisible} onDismiss={() => setTypeSelectVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Select Vehicle Type</Dialog.Title>
+          <Dialog.ScrollArea style={{ maxHeight: 350, paddingHorizontal: 0 }}>
+            <FlatList
+              data={VEHICLE_TYPES}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <List.Item
+                  title={item}
+                  titleStyle={selectedVehicleType === item ? { color: "#0267D2", fontWeight: "700" } : undefined}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={selectedVehicleType === item ? "check-circle" : "circle-outline"}
+                      color={selectedVehicleType === item ? "#0267D2" : "#94A3B8"}
+                    />
+                  )}
+                  onPress={() => {
+                    setValue("vehicle_type", item);
+                    setTypeSelectVisible(false);
+                  }}
+                />
+              )}
+            />
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button textColor="#0267D2" onPress={() => setTypeSelectVisible(false)}>Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+
         {/* Existing Owner Selector Dialog */}
-        <Dialog visible={ownerSelectVisible} onDismiss={() => setOwnerSelectVisible(false)}>
-          <Dialog.Title>Select Existing Owner</Dialog.Title>
+        <Dialog visible={ownerSelectVisible} onDismiss={() => setOwnerSelectVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Select Existing Owner</Dialog.Title>
           <Dialog.ScrollArea style={{ maxHeight: 380, paddingHorizontal: 0 }}>
             <FlatList
               data={existingOwners}
@@ -468,6 +528,14 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
                 <List.Item
                   title={`${o.fname} ${o.lname}`}
                   description={`${o.type}${o.contact_no ? " · " + o.contact_no : ""}`}
+                  titleStyle={selectedOwnerId === o.owner_id ? { color: "#0267D2", fontWeight: "700" } : undefined}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={selectedOwnerId === o.owner_id ? "check-circle" : "account-outline"}
+                      color={selectedOwnerId === o.owner_id ? "#0267D2" : "#94A3B8"}
+                    />
+                  )}
                   onPress={() => {
                     setValue("owner_id", o.owner_id);
                     setOwnerSelectVisible(false);
@@ -482,7 +550,38 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
             />
           </Dialog.ScrollArea>
           <Dialog.Actions>
-            <Button onPress={() => setOwnerSelectVisible(false)}>Close</Button>
+            <Button textColor="#0267D2" onPress={() => setOwnerSelectVisible(false)}>Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Owner Category Selector Dialog */}
+        <Dialog visible={ownerTypePickerVisible} onDismiss={() => setOwnerTypePickerVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Select Owner Category</Dialog.Title>
+          <Dialog.ScrollArea style={{ maxHeight: 260, paddingHorizontal: 0 }}>
+            <FlatList
+              data={["Student", "Faculty", "Staff", "Visitor"] as OwnerType[]}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <List.Item
+                  title={item}
+                  titleStyle={selectedOwnerType === item ? { color: "#0267D2", fontWeight: "700" } : undefined}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={selectedOwnerType === item ? "check-circle" : "circle-outline"}
+                      color={selectedOwnerType === item ? "#0267D2" : "#94A3B8"}
+                    />
+                  )}
+                  onPress={() => {
+                    setValue("type", item);
+                    setOwnerTypePickerVisible(false);
+                  }}
+                />
+              )}
+            />
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button textColor="#0267D2" onPress={() => setOwnerTypePickerVisible(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -507,5 +606,7 @@ const styles = StyleSheet.create({
   currentStatus: { marginTop: 8, fontWeight: "600" },
   notFoundText: { color: "#B91C1C", fontWeight: "600", marginBottom: 4 },
   retake: { marginTop: 20, alignSelf: "center" },
+  dialog: { backgroundColor: "#FFFFFF", borderRadius: 16 },
+  dialogTitle: { fontWeight: "800", color: "#0B192C" },
 });
 
