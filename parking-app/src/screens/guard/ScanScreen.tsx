@@ -14,6 +14,9 @@ import { recognizePlate } from "@/lib/ocr";
 import { cropPlateImage } from "@/lib/cropPlate";
 import { Palette } from "@/theme/colors";
 
+import { useVehicleByPlate } from "@/hooks/useVehicleByPlate";
+import { useParkingRecords } from "@/hooks/useParkingRecords";
+
 type Props = NativeStackScreenProps<GuardStackParamList, "Scan">;
 
 export default function ScanScreen({ navigation }: Props) {
@@ -25,6 +28,9 @@ export default function ScanScreen({ navigation }: Props) {
   const [autoScanEnabled, setAutoScanEnabled] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string>("ALIGN VEHICLE / PLATE IN VIEW");
   const isScanningRef = useRef(false);
+
+  const { findVehicleByPlate } = useVehicleByPlate();
+  const { logEntryOrExit } = useParkingRecords();
 
   // High-Tech Scanning Laser Animation
   const laserAnim = useRef(new Animated.Value(0)).current;
@@ -58,6 +64,34 @@ export default function ScanScreen({ navigation }: Props) {
     if (!hasPermission) requestPermission();
   }, [hasPermission, requestPermission]);
 
+  // Process and Auto-Log plate if found in database
+  const processCapturedPlate = async (photoUri: string) => {
+    const ocrResult = await recognizePlate(photoUri);
+    if (!ocrResult.candidatePlate) return;
+
+    setStatusMessage(`DETECTED: ${ocrResult.candidatePlate}`);
+    const croppedUri = await cropPlateImage(photoUri, ocrResult.frame);
+
+    // Look up plate in database
+    const vehicle = await findVehicleByPlate(ocrResult.candidatePlate);
+
+    if (vehicle) {
+      // Vehicle found! Auto-log entry or exit immediately
+      const actionLabel = vehicle.status === "Parked" ? "EXIT" : "ENTRY";
+      setStatusMessage(`LOGGING ${actionLabel}: ${vehicle.plate_number}...`);
+      const logResult = await logEntryOrExit(vehicle, croppedUri);
+      if (logResult) {
+        setStatusMessage(`LOGGED ${actionLabel.toUpperCase()}: ${vehicle.plate_number}`);
+        // Navigate to LiveStatus or Confirm summary
+        navigation.navigate("LiveStatus");
+        return;
+      }
+    }
+
+    // If vehicle not found in database or low confidence, navigate to confirm/register screen
+    navigation.navigate("ConfirmPlate", { photoUri: croppedUri, ocrResult });
+  };
+
   // Periodic Auto-Scan loop
   useEffect(() => {
     if (!isFocused || !autoScanEnabled || !hasPermission || !device) return;
@@ -74,8 +108,19 @@ export default function ScanScreen({ navigation }: Props) {
           setStatusMessage(`LOCK ACQUIRED: ${ocrResult.candidatePlate}`);
           clearInterval(intervalId);
 
-          // Crop only the plate number area
           const croppedUri = await cropPlateImage(photoUri, ocrResult.frame);
+          const vehicle = await findVehicleByPlate(ocrResult.candidatePlate);
+
+          if (vehicle) {
+            const actionLabel = vehicle.status === "Parked" ? "EXIT" : "ENTRY";
+            setStatusMessage(`AUTO-LOGGING ${actionLabel}: ${vehicle.plate_number}...`);
+            const logResult = await logEntryOrExit(vehicle, croppedUri);
+            if (logResult) {
+              navigation.navigate("LiveStatus");
+              return;
+            }
+          }
+
           navigation.navigate("ConfirmPlate", { photoUri: croppedUri, ocrResult });
         } else {
           setStatusMessage("ALIGN VEHICLE / PLATE IN VIEW");
@@ -90,7 +135,7 @@ export default function ScanScreen({ navigation }: Props) {
     return () => {
       clearInterval(intervalId);
     };
-  }, [isFocused, autoScanEnabled, hasPermission, device, navigation]);
+  }, [isFocused, autoScanEnabled, hasPermission, device, navigation, findVehicleByPlate, logEntryOrExit]);
 
   // Manual Capture button
   async function handleManualCapture() {
@@ -100,11 +145,7 @@ export default function ScanScreen({ navigation }: Props) {
     try {
       const photo = await camera.current.takePhoto({ flash: "auto" });
       const photoUri = `file://${photo.path}`;
-      const ocrResult = await recognizePlate(photoUri);
-
-      // Crop plate image
-      const croppedUri = await cropPlateImage(photoUri, ocrResult.frame);
-      navigation.navigate("ConfirmPlate", { photoUri: croppedUri, ocrResult });
+      await processCapturedPlate(photoUri);
     } catch (err) {
       setStatusMessage("SCAN FAILED. RETRY.");
     } finally {

@@ -112,6 +112,9 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     loadOwners();
+    if (ocrResult.candidatePlate) {
+      handleLookup();
+    }
   }, []);
 
   async function handleLookup() {
