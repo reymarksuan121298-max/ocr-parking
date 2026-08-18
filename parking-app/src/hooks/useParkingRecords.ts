@@ -36,7 +36,11 @@ export function useParkingRecords() {
   }, []);
 
   const logEntryOrExit = useCallback(
-    async (vehicle: Vehicle, photoUri?: string): Promise<LogEntryExitResult | null> => {
+    async (
+      vehicle: Vehicle,
+      photoUri?: string,
+      forcedAction?: "entry" | "exit"
+    ): Promise<LogEntryExitResult | null> => {
       if (!profile) return null;
       setSubmitting(true);
       try {
@@ -51,15 +55,37 @@ export function useParkingRecords() {
           ? await uploadPlateImage(photoUri, vehicle.plate_number)
           : null;
 
-        if (openRecord) {
+        const isExit = forcedAction ? forcedAction === "exit" : Boolean(openRecord);
+
+        if (isExit) {
           // EXIT
-          const { data: updated, error } = await (supabase
-            .from("parking_records") as any)
-            .update({ time_out: new Date().toISOString(), status: "Exited" })
-            .eq("record_id", openRecord.record_id)
-            .select("*")
-            .single();
-          if (error) throw error;
+          let updated: any = null;
+          if (openRecord) {
+            const { data, error } = await (supabase
+              .from("parking_records") as any)
+              .update({ time_out: new Date().toISOString(), status: "Exited" })
+              .eq("record_id", openRecord.record_id)
+              .select("*")
+              .single();
+            if (error) throw error;
+            updated = data;
+          } else {
+            // If exiting without prior open record
+            const { data, error } = await (supabase
+              .from("parking_records") as any)
+              .insert({
+                user_id: profile.id,
+                vehicle_id: vehicle.vehicle_id,
+                time_in: new Date().toISOString(),
+                time_out: new Date().toISOString(),
+                status: "Exited",
+                image_path: imagePath,
+              })
+              .select("*")
+              .single();
+            if (error) throw error;
+            updated = data;
+          }
 
           await (supabase.from("vehicles") as any).update({ status: "Outside" }).eq(
             "vehicle_id",
@@ -74,7 +100,7 @@ export function useParkingRecords() {
           return { action: "exit", record: updated as ParkingRecord };
         }
 
-        // ENTRY
+        // ENTRY / PARKED (whether Inside or Outside)
         const { data: created, error } = await (supabase
           .from("parking_records") as any)
           .insert({

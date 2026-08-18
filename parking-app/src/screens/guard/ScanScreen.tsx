@@ -140,8 +140,9 @@ export default function ScanScreen({ navigation }: Props) {
 
   // Commit Log from Modal
   async function handleCommitLog(targetVehicle: Vehicle, forceAction?: "entry" | "exit") {
-    setLoggingAction(forceAction ?? (targetVehicle.status === "Parked" ? "exit" : "entry"));
-    const result = await logEntryOrExit(targetVehicle, scannedPhotoUri ?? undefined);
+    const action = forceAction ?? (targetVehicle.status === "Parked" ? "exit" : "entry");
+    setLoggingAction(action);
+    const result = await logEntryOrExit(targetVehicle, scannedPhotoUri ?? undefined, action);
     setLoggingAction(null);
     if (result) {
       setModalVisible(false);
@@ -343,55 +344,37 @@ export default function ScanScreen({ navigation }: Props) {
             {/* Action Buttons */}
             {matchedVehicle ? (
               <View style={{ gap: 10, marginTop: 6 }}>
-                {matchedVehicle.status === "Parked" ? (
-                  <>
-                    <Button
-                      mode="contained"
-                      icon="car-arrow-left"
-                      buttonColor="#7C3AED"
-                      loading={submitting && loggingAction === "exit"}
-                      onPress={() => handleCommitLog(matchedVehicle, "exit")}
-                      style={styles.modalActionBtn}
-                      contentStyle={{ paddingVertical: 6 }}
-                    >
-                      LOG AS EXITED (EXIT)
-                    </Button>
-                    <Button
-                      mode="outlined"
-                      icon="car-arrow-right"
-                      textColor="#059669"
-                      loading={submitting && loggingAction === "entry"}
-                      onPress={() => handleCommitLog(matchedVehicle, "entry")}
-                      style={{ borderColor: "#059669" }}
-                    >
-                      Re-log as Parked (Entry)
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      mode="contained"
-                      icon="car-arrow-right"
-                      buttonColor="#059669"
-                      loading={submitting && loggingAction === "entry"}
-                      onPress={() => handleCommitLog(matchedVehicle, "entry")}
-                      style={styles.modalActionBtn}
-                      contentStyle={{ paddingVertical: 6 }}
-                    >
-                      LOG AS PARKED (ENTRY)
-                    </Button>
-                    <Button
-                      mode="outlined"
-                      icon="car-arrow-left"
-                      textColor="#7C3AED"
-                      loading={submitting && loggingAction === "exit"}
-                      onPress={() => handleCommitLog(matchedVehicle, "exit")}
-                      style={{ borderColor: "#7C3AED" }}
-                    >
-                      Log as Exited (Exit)
-                    </Button>
-                  </>
-                )}
+                <Button
+                  mode={matchedVehicle.status === "Parked" ? "outlined" : "contained"}
+                  icon="car-arrow-right"
+                  buttonColor={matchedVehicle.status === "Parked" ? undefined : "#059669"}
+                  textColor={matchedVehicle.status === "Parked" ? "#059669" : "#FFFFFF"}
+                  loading={submitting && loggingAction === "entry"}
+                  onPress={() => handleCommitLog(matchedVehicle, "entry")}
+                  style={[
+                    styles.modalActionBtn,
+                    matchedVehicle.status === "Parked" ? { borderColor: "#059669" } : undefined,
+                  ]}
+                  contentStyle={{ paddingVertical: 6 }}
+                >
+                  {matchedVehicle.status === "Parked" ? "RE-LOG AS PARKED (ENTRY)" : "LOG AS PARKED (ENTRY)"}
+                </Button>
+
+                <Button
+                  mode={matchedVehicle.status === "Parked" ? "contained" : "outlined"}
+                  icon="car-arrow-left"
+                  buttonColor={matchedVehicle.status === "Parked" ? "#7C3AED" : undefined}
+                  textColor={matchedVehicle.status === "Parked" ? "#FFFFFF" : "#7C3AED"}
+                  loading={submitting && loggingAction === "exit"}
+                  onPress={() => handleCommitLog(matchedVehicle, "exit")}
+                  style={[
+                    styles.modalActionBtn,
+                    matchedVehicle.status !== "Parked" ? { borderColor: "#7C3AED" } : undefined,
+                  ]}
+                  contentStyle={{ paddingVertical: 6 }}
+                >
+                  LOG AS EXITED (EXIT)
+                </Button>
               </View>
             ) : (
               <View style={{ gap: 10, marginTop: 6 }}>
