@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { Alert, FlatList, StyleSheet, View } from "react-native";
 import {
   Button,
   Dialog,
@@ -146,23 +146,34 @@ export default function UsersScreen() {
     loadUsers();
   }
 
-  async function handleDelete(user: AppUser) {
-    if (!Config.SUPABASE_SERVICE_ROLE_KEY) {
-      setErrorMsg("Service Role Key is missing in .env.");
-      return;
-    }
-    const adminClient = createClient(Config.SUPABASE_URL!, Config.SUPABASE_SERVICE_ROLE_KEY!);
-    
-    // Deleting the auth user automatically cascades to the public.users table if foreign keys are set,
-    // but just in case, we do both or let cascade handle it.
-    const { error } = await adminClient.auth.admin.deleteUser(user.id);
-    if (error) {
-      setErrorMsg(error.message);
-    } else {
-      await supabase.from("users").delete().eq("id", user.id);
-      await logAction("Delete User", `Deleted account for ${user.full_name}`);
-      loadUsers();
-    }
+  function handleDelete(user: AppUser) {
+    Alert.alert(
+      "Confirm Account Deletion",
+      `Are you sure you want to permanently delete the account for "${user.full_name}" (${user.role.toUpperCase()})?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            if (!Config.SUPABASE_SERVICE_ROLE_KEY) {
+              setErrorMsg("Service Role Key is missing in .env.");
+              return;
+            }
+            const adminClient = createClient(Config.SUPABASE_URL!, Config.SUPABASE_SERVICE_ROLE_KEY!);
+            
+            const { error } = await adminClient.auth.admin.deleteUser(user.id);
+            if (error) {
+              setErrorMsg(error.message);
+            } else {
+              await supabase.from("users").delete().eq("id", user.id);
+              await logAction("Delete User", `Deleted account for ${user.full_name}`);
+              loadUsers();
+            }
+          },
+        },
+      ]
+    );
   }
 
   return (

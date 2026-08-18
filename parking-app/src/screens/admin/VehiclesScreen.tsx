@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { Alert, FlatList, StyleSheet, View } from "react-native";
 import { Button, Dialog, FAB, IconButton, List, Portal, Text, TextInput } from "react-native-paper";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -116,23 +116,37 @@ export default function VehiclesScreen() {
     loadData();
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!editing) return;
-    try {
-      // First delete associated parking records if any (in case FK cascade is not configured on remote db)
-      await supabase.from("parking_records").delete().eq("vehicle_id", editing.vehicle_id);
+    const targetVehicle = editing;
+    Alert.alert(
+      "Confirm Deletion",
+      `Are you sure you want to delete vehicle with plate "${targetVehicle.plate_number}"? This will also remove its associated records.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // First delete associated parking records if any
+              await supabase.from("parking_records").delete().eq("vehicle_id", targetVehicle.vehicle_id);
 
-      const { error } = await supabase.from("vehicles").delete().eq("vehicle_id", editing.vehicle_id);
-      if (error) {
-        console.warn("[handleDelete vehicle error]:", error.message);
-        return;
-      }
-      await logAction("Delete Vehicle", `Deleted vehicle ${editing.plate_number}`);
-      setDialogVisible(false);
-      loadData();
-    } catch (err) {
-      console.warn("[handleDelete vehicle failed]:", err);
-    }
+              const { error } = await supabase.from("vehicles").delete().eq("vehicle_id", targetVehicle.vehicle_id);
+              if (error) {
+                console.warn("[handleDelete vehicle error]:", error.message);
+                return;
+              }
+              await logAction("Delete Vehicle", `Deleted vehicle ${targetVehicle.plate_number}`);
+              setDialogVisible(false);
+              loadData();
+            } catch (err) {
+              console.warn("[handleDelete vehicle failed]:", err);
+            }
+          },
+        },
+      ]
+    );
   }
 
   return (

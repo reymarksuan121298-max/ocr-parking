@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { Alert, FlatList, StyleSheet, View } from "react-native";
 import {
   Button,
   Dialog,
@@ -114,15 +114,28 @@ export default function OwnersScreen() {
     loadOwners();
   }
 
-  async function handleDelete(owner: VehicleOwner) {
-    const { error } = await supabase
-      .from("vehicle_owners")
-      .delete()
-      .eq("owner_id", owner.owner_id);
-    if (!error) {
-      await logAction("Delete Owner", `Removed owner ${owner.fname} ${owner.lname}`);
-      loadOwners();
-    }
+  function handleDelete(owner: VehicleOwner) {
+    Alert.alert(
+      "Confirm Deletion",
+      `Are you sure you want to remove owner "${owner.fname} ${owner.lname}"? This will also remove all vehicles registered under this owner.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const { error } = await supabase
+              .from("vehicle_owners")
+              .delete()
+              .eq("owner_id", owner.owner_id);
+            if (!error) {
+              await logAction("Delete Owner", `Removed owner ${owner.fname} ${owner.lname}`);
+              loadOwners();
+            }
+          },
+        },
+      ]
+    );
   }
 
   return (

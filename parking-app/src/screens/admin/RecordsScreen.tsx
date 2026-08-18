@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { Alert, FlatList, StyleSheet, View } from "react-native";
 import { Button, Dialog, FAB, List, Portal, SegmentedButtons, Text, TextInput } from "react-native-paper";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -147,14 +147,28 @@ export default function RecordsScreen() {
     loadData();
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!editing) return;
-    const { error } = await supabase.from("parking_records").delete().eq("record_id", editing.record_id);
-    if (!error) {
-      await logAction("Delete Record", `Deleted parking record for vehicle ${editing.vehicle?.plate_number}`);
-      setDialogVisible(false);
-      loadData();
-    }
+    const targetRecord = editing;
+    Alert.alert(
+      "Confirm Deletion",
+      `Are you sure you want to delete this parking record for vehicle "${targetRecord.vehicle?.plate_number ?? "Selected"}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const { error } = await supabase.from("parking_records").delete().eq("record_id", targetRecord.record_id);
+            if (!error) {
+              await logAction("Delete Record", `Deleted parking record for vehicle ${targetRecord.vehicle?.plate_number}`);
+              setDialogVisible(false);
+              loadData();
+            }
+          },
+        },
+      ]
+    );
   }
 
   return (
