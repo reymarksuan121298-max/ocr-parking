@@ -69,10 +69,12 @@ export default function ScanScreen({ navigation }: Props) {
         const photoUri = `file://${photo.path}`;
         const ocrResult = await recognizePlate(photoUri);
 
-        if (ocrResult.candidatePlate && (ocrResult.confidence === "high" || ocrResult.candidatePlate.length >= 6)) {
+        if (ocrResult.candidatePlate && ocrResult.confidence === "high") {
           setStatusMessage(`LOCK ACQUIRED: ${ocrResult.candidatePlate}`);
           clearInterval(intervalId);
           navigation.navigate("ConfirmPlate", { photoUri, ocrResult });
+        } else {
+          setStatusMessage("ALIGN VEHICLE / PLATE IN VIEW");
         }
       } catch (err) {
         // Skip frame
