@@ -174,8 +174,8 @@ export default function UsersScreen() {
       <FAB icon="plus" style={styles.fab} onPress={openCreate} label="Add Account" />
 
       <Portal>
-        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)}>
-          <Dialog.Title>{editing ? "Edit Account" : "New Guard / Admin Account"}</Dialog.Title>
+        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>{editing ? "Edit User" : "New User Account"}</Dialog.Title>
           <Dialog.Content style={{ gap: 10 }}>
             <Controller
               control={control}
@@ -186,6 +186,8 @@ export default function UsersScreen() {
                   value={field.value}
                   onChangeText={field.onChange}
                   mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0267D2"
                   error={!!errors.full_name}
                 />
               )}
@@ -203,6 +205,8 @@ export default function UsersScreen() {
                       autoCapitalize="none"
                       keyboardType="email-address"
                       mode="outlined"
+                      outlineColor="#CBD5E1"
+                      activeOutlineColor="#0267D2"
                       error={!!errors.email}
                     />
                   )}
@@ -217,7 +221,9 @@ export default function UsersScreen() {
                       onChangeText={field.onChange}
                       secureTextEntry={!showPassword}
                       mode="outlined"
-                      left={<TextInput.Icon icon="lock-outline" color="#64748B" />}
+                      outlineColor="#CBD5E1"
+                      activeOutlineColor="#0267D2"
+                      left={<TextInput.Icon icon="lock-outline" color="#0267D2" />}
                       right={
                         <TextInput.Icon
                           icon={showPassword ? "eye-off-outline" : "eye-outline"}
@@ -241,6 +247,8 @@ export default function UsersScreen() {
                   value={field.value}
                   onChangeText={field.onChange}
                   mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0267D2"
                 />
               )}
             />
@@ -260,8 +268,8 @@ export default function UsersScreen() {
             />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDialogVisible(false)}>Cancel</Button>
-            <Button onPress={handleSubmit(onSubmit)}>{editing ? "Save" : "Create"}</Button>
+            <Button textColor="#64748B" onPress={() => setDialogVisible(false)}>Cancel</Button>
+            <Button mode="contained" buttonColor="#0267D2" onPress={handleSubmit(onSubmit)}>{editing ? "Save" : "Create"}</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -276,6 +284,6 @@ export default function UsersScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   fab: { position: "absolute", right: 16, bottom: 16, backgroundColor: "#0267D2" },
+  dialog: { backgroundColor: "#FFFFFF", borderRadius: 16 },
+  dialogTitle: { fontWeight: "800", color: "#0B192C" },
 });
-
-

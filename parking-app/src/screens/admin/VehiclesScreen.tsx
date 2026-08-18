@@ -131,8 +131,8 @@ export default function VehiclesScreen() {
       <FAB icon="plus" style={styles.fab} onPress={openCreate} label="Register Vehicle" />
 
       <Portal>
-        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)}>
-          <Dialog.Title>{editing ? "Edit Vehicle" : "Register Vehicle"}</Dialog.Title>
+        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>{editing ? "Edit Vehicle" : "Register Vehicle"}</Dialog.Title>
           <Dialog.Content style={{ gap: 12 }}>
             <Controller
               control={control}
@@ -144,6 +144,8 @@ export default function VehiclesScreen() {
                   onChangeText={(t) => field.onChange(t.toUpperCase())}
                   autoCapitalize="characters"
                   mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0267D2"
                   error={!!errors.plate_number}
                 />
               )}
@@ -156,6 +158,8 @@ export default function VehiclesScreen() {
                 icon="menu-down"
                 contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
                 onPress={() => setTypeSelectVisible(true)}
+                textColor="#0F172A"
+                style={styles.pickerButton}
               >
                 {selectedType || "Select Vehicle Type"}
               </Button>
@@ -169,6 +173,8 @@ export default function VehiclesScreen() {
                 icon="account"
                 contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
                 onPress={() => setOwnerSelectVisible(true)}
+                textColor="#0F172A"
+                style={styles.pickerButton}
               >
                 {selectedOwner
                   ? `${selectedOwner.fname} ${selectedOwner.lname} (${selectedOwner.type})`
@@ -183,14 +189,14 @@ export default function VehiclesScreen() {
                 Delete
               </Button>
             )}
-            <Button onPress={() => setDialogVisible(false)}>Cancel</Button>
-            <Button onPress={handleSubmit(onSubmit)}>Save</Button>
+            <Button textColor="#64748B" onPress={() => setDialogVisible(false)}>Cancel</Button>
+            <Button mode="contained" buttonColor="#0267D2" onPress={handleSubmit(onSubmit)}>Save</Button>
           </Dialog.Actions>
         </Dialog>
 
         {/* Vehicle Type Picker Dialog */}
-        <Dialog visible={typeSelectVisible} onDismiss={() => setTypeSelectVisible(false)}>
-          <Dialog.Title>Select Vehicle Type</Dialog.Title>
+        <Dialog visible={typeSelectVisible} onDismiss={() => setTypeSelectVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Select Vehicle Type</Dialog.Title>
           <Dialog.ScrollArea style={{ maxHeight: 350, paddingHorizontal: 0 }}>
             <FlatList
               data={VEHICLE_TYPES}
@@ -198,6 +204,7 @@ export default function VehiclesScreen() {
               renderItem={({ item }) => (
                 <List.Item
                   title={item}
+                  titleStyle={selectedType === item ? { color: "#0267D2", fontWeight: "700" } : undefined}
                   left={(props) => (
                     <List.Icon
                       {...props}
@@ -214,13 +221,13 @@ export default function VehiclesScreen() {
             />
           </Dialog.ScrollArea>
           <Dialog.Actions>
-            <Button onPress={() => setTypeSelectVisible(false)}>Close</Button>
+            <Button textColor="#0267D2" onPress={() => setTypeSelectVisible(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
 
         {/* Owner Picker Dialog */}
-        <Dialog visible={ownerSelectVisible} onDismiss={() => setOwnerSelectVisible(false)}>
-          <Dialog.Title>Select Owner</Dialog.Title>
+        <Dialog visible={ownerSelectVisible} onDismiss={() => setOwnerSelectVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Select Owner</Dialog.Title>
           <Dialog.ScrollArea style={{ maxHeight: 400, paddingHorizontal: 0 }}>
             <FlatList
               data={owners}
@@ -229,6 +236,14 @@ export default function VehiclesScreen() {
                 <List.Item
                   title={`${o.fname} ${o.lname}`}
                   description={o.type}
+                  titleStyle={selectedOwnerId === o.owner_id ? { color: "#0267D2", fontWeight: "700" } : undefined}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={selectedOwnerId === o.owner_id ? "check-circle" : "account-outline"}
+                      color={selectedOwnerId === o.owner_id ? "#0267D2" : "#94A3B8"}
+                    />
+                  )}
                   onPress={() => {
                     setValue("owner_id", o.owner_id);
                     setOwnerSelectVisible(false);
@@ -238,7 +253,7 @@ export default function VehiclesScreen() {
             />
           </Dialog.ScrollArea>
           <Dialog.Actions>
-            <Button onPress={() => setOwnerSelectVisible(false)}>Close</Button>
+            <Button textColor="#0267D2" onPress={() => setOwnerSelectVisible(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -250,4 +265,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   fab: { position: "absolute", right: 16, bottom: 16, backgroundColor: "#0267D2" },
   pillWrap: { justifyContent: "center", paddingLeft: 8 },
+  dialog: { backgroundColor: "#FFFFFF", borderRadius: 16 },
+  dialogTitle: { fontWeight: "800", color: "#0B192C" },
+  pickerButton: { borderColor: "#CBD5E1", borderRadius: 8 },
 });

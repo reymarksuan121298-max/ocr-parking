@@ -177,15 +177,25 @@ export default function RecordsScreen() {
       <FAB icon="plus" style={styles.fab} onPress={openCreate} label="Add Record" />
 
       <Portal>
-        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)}>
-          <Dialog.Title>{editing ? "Edit Record" : "New Parking Record"}</Dialog.Title>
-          <Dialog.Content style={{ gap: 10 }}>
-            <Button mode="outlined" onPress={() => setVehicleSelectVisible(true)}>
-              {selectedVehicle
-                ? `${selectedVehicle.plate_number} (${selectedVehicle.vehicle_type})`
-                : "Select Vehicle"}
-            </Button>
-            {errors.vehicle_id && <Text style={{ color: "#DC2626" }}>{errors.vehicle_id.message}</Text>}
+        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>{editing ? "Edit Record" : "New Parking Record"}</Dialog.Title>
+          <Dialog.Content style={{ gap: 12 }}>
+            <View>
+              <Text variant="bodySmall" style={{ color: "#64748B", marginBottom: 4 }}>Vehicle</Text>
+              <Button
+                mode="outlined"
+                icon="car"
+                contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
+                onPress={() => setVehicleSelectVisible(true)}
+                textColor="#0F172A"
+                style={{ borderColor: "#CBD5E1", borderRadius: 8 }}
+              >
+                {selectedVehicle
+                  ? `${selectedVehicle.plate_number} (${selectedVehicle.vehicle_type})`
+                  : "Select Vehicle"}
+              </Button>
+              {errors.vehicle_id && <Text style={{ color: "#DC2626", fontSize: 12, marginTop: 4 }}>{errors.vehicle_id.message}</Text>}
+            </View>
 
             <Controller
               control={control}
@@ -196,6 +206,8 @@ export default function RecordsScreen() {
                   value={field.value}
                   onChangeText={field.onChange}
                   mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0267D2"
                   error={!!errors.time_in}
                 />
               )}
@@ -210,6 +222,8 @@ export default function RecordsScreen() {
                   value={field.value}
                   onChangeText={field.onChange}
                   mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0267D2"
                   error={!!errors.time_out}
                 />
               )}
@@ -232,15 +246,15 @@ export default function RecordsScreen() {
           </Dialog.Content>
           <Dialog.Actions style={editing ? { justifyContent: 'space-between' } : undefined}>
             {editing && <Button textColor="#DC2626" onPress={handleDelete}>Delete</Button>}
-            <View style={{ flexDirection: 'row' }}>
-              <Button onPress={() => setDialogVisible(false)}>Cancel</Button>
-              <Button onPress={handleSubmit(onSubmit)}>Save</Button>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Button textColor="#64748B" onPress={() => setDialogVisible(false)}>Cancel</Button>
+              <Button mode="contained" buttonColor="#0267D2" onPress={handleSubmit(onSubmit)}>Save</Button>
             </View>
           </Dialog.Actions>
         </Dialog>
 
-        <Dialog visible={vehicleSelectVisible} onDismiss={() => setVehicleSelectVisible(false)}>
-          <Dialog.Title>Select Vehicle</Dialog.Title>
+        <Dialog visible={vehicleSelectVisible} onDismiss={() => setVehicleSelectVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Select Vehicle</Dialog.Title>
           <Dialog.ScrollArea style={{ maxHeight: 400, paddingHorizontal: 0 }}>
             <FlatList
               data={vehicles}
@@ -249,6 +263,14 @@ export default function RecordsScreen() {
                 <List.Item
                   title={v.plate_number}
                   description={`${v.vehicle_type} · ${v.owner?.fname} ${v.owner?.lname}`}
+                  titleStyle={selectedVehicleId === v.vehicle_id ? { color: "#0267D2", fontWeight: "700" } : undefined}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={selectedVehicleId === v.vehicle_id ? "check-circle" : "car"}
+                      color={selectedVehicleId === v.vehicle_id ? "#0267D2" : "#94A3B8"}
+                    />
+                  )}
                   onPress={() => {
                     setValue("vehicle_id", v.vehicle_id);
                     setVehicleSelectVisible(false);
@@ -258,7 +280,7 @@ export default function RecordsScreen() {
             />
           </Dialog.ScrollArea>
           <Dialog.Actions>
-            <Button onPress={() => setVehicleSelectVisible(false)}>Close</Button>
+            <Button textColor="#0267D2" onPress={() => setVehicleSelectVisible(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -273,6 +295,8 @@ const styles = StyleSheet.create({
   segmented: {},
   empty: { textAlign: "center", marginTop: 40, color: "#94A3B8" },
   fab: { position: "absolute", right: 16, bottom: 16, backgroundColor: "#0267D2" },
+  dialog: { backgroundColor: "#FFFFFF", borderRadius: 16 },
+  dialogTitle: { fontWeight: "800", color: "#0B192C" },
 });
 
 

@@ -133,8 +133,8 @@ export default function OwnersScreen() {
       <FAB icon="plus" style={styles.fab} onPress={openCreate} label="Add Owner" />
 
       <Portal>
-        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)}>
-          <Dialog.Title>{editing ? "Edit Owner" : "New Vehicle Owner"}</Dialog.Title>
+        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>{editing ? "Edit Owner" : "New Vehicle Owner"}</Dialog.Title>
           <Dialog.Content style={{ gap: 12 }}>
             <Controller
               control={control}
@@ -145,6 +145,8 @@ export default function OwnersScreen() {
                   value={field.value}
                   onChangeText={field.onChange}
                   mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0267D2"
                   error={!!errors.fname}
                 />
               )}
@@ -158,6 +160,8 @@ export default function OwnersScreen() {
                   value={field.value}
                   onChangeText={field.onChange}
                   mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0267D2"
                 />
               )}
             />
@@ -170,6 +174,8 @@ export default function OwnersScreen() {
                   value={field.value}
                   onChangeText={field.onChange}
                   mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0267D2"
                   error={!!errors.lname}
                 />
               )}
@@ -183,6 +189,8 @@ export default function OwnersScreen() {
                   value={field.value}
                   onChangeText={field.onChange}
                   mode="outlined"
+                  outlineColor="#CBD5E1"
+                  activeOutlineColor="#0267D2"
                   keyboardType="phone-pad"
                 />
               )}
@@ -195,20 +203,22 @@ export default function OwnersScreen() {
                 icon="menu-down"
                 contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
                 onPress={() => setTypePickerVisible(true)}
+                textColor="#0F172A"
+                style={styles.pickerButton}
               >
                 {selectedType}
               </Button>
             </View>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDialogVisible(false)}>Cancel</Button>
-            <Button onPress={handleSubmit(onSubmit)}>Save</Button>
+            <Button textColor="#64748B" onPress={() => setDialogVisible(false)}>Cancel</Button>
+            <Button mode="contained" buttonColor="#0267D2" onPress={handleSubmit(onSubmit)}>Save</Button>
           </Dialog.Actions>
         </Dialog>
 
         {/* Owner Category Picker Dialog */}
-        <Dialog visible={typePickerVisible} onDismiss={() => setTypePickerVisible(false)}>
-          <Dialog.Title>Select Category</Dialog.Title>
+        <Dialog visible={typePickerVisible} onDismiss={() => setTypePickerVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Select Category</Dialog.Title>
           <Dialog.ScrollArea style={{ maxHeight: 260, paddingHorizontal: 0 }}>
             <FlatList
               data={OWNER_TYPES}
@@ -216,6 +226,7 @@ export default function OwnersScreen() {
               renderItem={({ item }) => (
                 <List.Item
                   title={item}
+                  titleStyle={selectedType === item ? { color: "#0267D2", fontWeight: "700" } : undefined}
                   left={(props) => (
                     <List.Icon
                       {...props}
@@ -232,7 +243,7 @@ export default function OwnersScreen() {
             />
           </Dialog.ScrollArea>
           <Dialog.Actions>
-            <Button onPress={() => setTypePickerVisible(false)}>Close</Button>
+            <Button textColor="#0267D2" onPress={() => setTypePickerVisible(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -243,4 +254,7 @@ export default function OwnersScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   fab: { position: "absolute", right: 16, bottom: 16, backgroundColor: "#0267D2" },
+  dialog: { backgroundColor: "#FFFFFF", borderRadius: 16 },
+  dialogTitle: { fontWeight: "800", color: "#0B192C" },
+  pickerButton: { borderColor: "#CBD5E1", borderRadius: 8 },
 });
