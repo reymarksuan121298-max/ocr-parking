@@ -11,6 +11,7 @@ import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { GuardStackParamList } from "@/navigation/RootNavigator";
 import { recognizePlate } from "@/lib/ocr";
+import { cropPlateImage } from "@/lib/cropPlate";
 import { Palette } from "@/theme/colors";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "Scan">;
@@ -72,7 +73,10 @@ export default function ScanScreen({ navigation }: Props) {
         if (ocrResult.candidatePlate && ocrResult.confidence === "high") {
           setStatusMessage(`LOCK ACQUIRED: ${ocrResult.candidatePlate}`);
           clearInterval(intervalId);
-          navigation.navigate("ConfirmPlate", { photoUri, ocrResult });
+
+          // Crop only the plate number area
+          const croppedUri = await cropPlateImage(photoUri, ocrResult.frame);
+          navigation.navigate("ConfirmPlate", { photoUri: croppedUri, ocrResult });
         } else {
           setStatusMessage("ALIGN VEHICLE / PLATE IN VIEW");
         }
@@ -97,7 +101,10 @@ export default function ScanScreen({ navigation }: Props) {
       const photo = await camera.current.takePhoto({ flash: "auto" });
       const photoUri = `file://${photo.path}`;
       const ocrResult = await recognizePlate(photoUri);
-      navigation.navigate("ConfirmPlate", { photoUri, ocrResult });
+
+      // Crop plate image
+      const croppedUri = await cropPlateImage(photoUri, ocrResult.frame);
+      navigation.navigate("ConfirmPlate", { photoUri: croppedUri, ocrResult });
     } catch (err) {
       setStatusMessage("SCAN FAILED. RETRY.");
     } finally {

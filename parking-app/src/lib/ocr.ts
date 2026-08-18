@@ -1,4 +1,4 @@
-import TextRecognition from "@react-native-ml-kit/text-recognition";
+import TextRecognition, { Frame } from "@react-native-ml-kit/text-recognition";
 
 /**
  * Standard Philippine vehicle and motorcycle plate formats:
@@ -15,28 +15,56 @@ const PLATE_PATTERNS = [
   /\b\d{4}[- ]?[A-Z]{2}\b/,     // e.g. 1234 AB
 ];
 
+export interface PlateFrame {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 export interface OcrResult {
   rawText: string;
   candidatePlate: string | null;
   confidence: "high" | "low";
+  frame?: PlateFrame | null;
 }
 
 /**
- * Runs on-device OCR against a captured photo and extracts the license plate.
- * Only valid structured license plate matches will return high confidence.
+ * Runs on-device OCR against a captured photo and extracts the license plate along with its bounding box.
  */
 export async function recognizePlate(photoPath: string): Promise<OcrResult> {
   const result = await TextRecognition.recognize(photoPath);
   const rawText = result.text.replace(/\n/g, " ").toUpperCase();
 
+  // Search each text block and line to locate exact bounding box coordinates
+  for (const block of result.blocks) {
+    for (const line of block.lines) {
+      const lineText = line.text.toUpperCase();
+      for (const pattern of PLATE_PATTERNS) {
+        const match = lineText.match(pattern);
+        if (match) {
+          const candidate = match[0].replace(/[- ]/g, "").trim();
+          return {
+            rawText,
+            candidatePlate: candidate,
+            confidence: "high",
+            frame: line.frame ?? block.frame ?? null,
+          };
+        }
+      }
+    }
+  }
+
+  // Fallback check on whole rawText if individual line boundary differed
   for (const pattern of PLATE_PATTERNS) {
     const match = rawText.match(pattern);
     if (match) {
       const candidate = match[0].replace(/[- ]/g, "").trim();
-      return { rawText, candidatePlate: candidate, confidence: "high" };
+      return { rawText, candidatePlate: candidate, confidence: "high", frame: null };
     }
   }
 
-  return { rawText, candidatePlate: null, confidence: "low" };
+  return { rawText, candidatePlate: null, confidence: "low", frame: null };
 }
+
 
