@@ -272,6 +272,7 @@ const styles = StyleSheet.create({
   search: {},
   segmented: {},
   empty: { textAlign: "center", marginTop: 40, color: "#94A3B8" },
-  fab: { position: "absolute", right: 16, bottom: 16 },
+  fab: { position: "absolute", right: 16, bottom: 16, backgroundColor: "#0267D2" },
 });
+
 

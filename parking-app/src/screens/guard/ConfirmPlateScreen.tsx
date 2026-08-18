@@ -10,6 +10,7 @@ import { useVehicleByPlate } from "@/hooks/useVehicleByPlate";
 import { useParkingRecords } from "@/hooks/useParkingRecords";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { supabase } from "@/lib/supabase";
+import { VEHICLE_TYPES } from "@/constants/vehicleTypes";
 import type { OwnerType, Vehicle, VehicleOwner } from "@/types/database";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "ConfirmPlate">;
@@ -66,8 +67,10 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
 
   // Registration modal states
   const [registerDialogVisible, setRegisterDialogVisible] = useState(false);
-  const [ownerSelectVisible, setOwnerSelectVisible] = useState(false);
   const [existingOwners, setExistingOwners] = useState<VehicleOwner[]>([]);
+  const [ownerSelectVisible, setOwnerSelectVisible] = useState(false);
+  const [typeSelectVisible, setTypeSelectVisible] = useState(false);
+  const [ownerTypePickerVisible, setOwnerTypePickerVisible] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
 
@@ -82,7 +85,7 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
     resolver: zodResolver(registerSchema),
     defaultValues: {
       plate_number: ocrResult.candidatePlate ?? "",
-      vehicle_type: "Motorcycle",
+      vehicle_type: "CAR",
       owner_mode: "new",
       owner_id: "",
       fname: "",
@@ -93,6 +96,8 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
     },
   });
 
+  const selectedVehicleType = watch("vehicle_type");
+  const selectedOwnerType = watch("type");
   const ownerMode = watch("owner_mode");
   const selectedOwnerId = watch("owner_id");
   const selectedOwner = existingOwners.find((o) => o.owner_id === selectedOwnerId);
@@ -255,6 +260,7 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
 
           <Button
             mode="contained"
+            buttonColor="#0267D2"
             onPress={handleConfirmLog}
             loading={submitting}
             style={styles.button}
@@ -316,19 +322,22 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
                 )}
               />
 
-              <Controller
-                control={control}
-                name="vehicle_type"
-                render={({ field }) => (
-                  <TextInput
-                    label="Vehicle Type (Motorcycle, Car, SUV...)"
-                    value={field.value}
-                    onChangeText={field.onChange}
-                    mode="outlined"
-                    error={!!errors.vehicle_type}
-                  />
+              <View>
+                <Text variant="bodySmall" style={{ color: "#64748B", marginBottom: 4 }}>Vehicle Type</Text>
+                <Button
+                  mode="outlined"
+                  icon="menu-down"
+                  contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
+                  onPress={() => setTypeSelectVisible(true)}
+                >
+                  {selectedVehicleType || "Select Vehicle Type"}
+                </Button>
+                {errors.vehicle_type && (
+                  <Text style={{ color: "#DC2626", fontSize: 12, marginTop: 4 }}>
+                    {errors.vehicle_type.message}
+                  </Text>
                 )}
-              />
+              </View>
 
               <Divider style={{ marginVertical: 4 }} />
               <Text variant="titleSmall" style={{ fontWeight: "700" }}>Vehicle Owner</Text>
@@ -416,23 +425,17 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
                     )}
                   />
 
-                  <Text variant="labelMedium" style={{ marginTop: 4 }}>Owner Category</Text>
-                  <Controller
-                    control={control}
-                    name="type"
-                    render={({ field }) => (
-                      <SegmentedButtons
-                        value={field.value}
-                        onValueChange={(v) => field.onChange(v as OwnerType)}
-                        buttons={[
-                          { value: "Student", label: "Student" },
-                          { value: "Faculty", label: "Faculty" },
-                          { value: "Staff", label: "Staff" },
-                          { value: "Visitor", label: "Visitor" },
-                        ]}
-                      />
-                    )}
-                  />
+                  <View style={{ marginTop: 8 }}>
+                    <Text variant="bodySmall" style={{ color: "#64748B", marginBottom: 4 }}>Owner Category</Text>
+                    <Button
+                      mode="outlined"
+                      icon="menu-down"
+                      contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
+                      onPress={() => setOwnerTypePickerVisible(true)}
+                    >
+                      {selectedOwnerType || "Select Category"}
+                    </Button>
+                  </View>
                 </>
               )}
 
@@ -454,6 +457,36 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
             >
               Save & Register
             </Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Vehicle Type Selector Dialog */}
+        <Dialog visible={typeSelectVisible} onDismiss={() => setTypeSelectVisible(false)}>
+          <Dialog.Title>Select Vehicle Type</Dialog.Title>
+          <Dialog.ScrollArea style={{ maxHeight: 350, paddingHorizontal: 0 }}>
+            <FlatList
+              data={VEHICLE_TYPES}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <List.Item
+                  title={item}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={selectedVehicleType === item ? "check-circle" : "circle-outline"}
+                      color={selectedVehicleType === item ? "#0267D2" : "#94A3B8"}
+                    />
+                  )}
+                  onPress={() => {
+                    setValue("vehicle_type", item);
+                    setTypeSelectVisible(false);
+                  }}
+                />
+              )}
+            />
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button onPress={() => setTypeSelectVisible(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
 
@@ -483,6 +516,36 @@ export default function ConfirmPlateScreen({ route, navigation }: Props) {
           </Dialog.ScrollArea>
           <Dialog.Actions>
             <Button onPress={() => setOwnerSelectVisible(false)}>Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Owner Category Selector Dialog */}
+        <Dialog visible={ownerTypePickerVisible} onDismiss={() => setOwnerTypePickerVisible(false)}>
+          <Dialog.Title>Select Owner Category</Dialog.Title>
+          <Dialog.ScrollArea style={{ maxHeight: 260, paddingHorizontal: 0 }}>
+            <FlatList
+              data={["Student", "Faculty", "Staff", "Visitor"] as OwnerType[]}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <List.Item
+                  title={item}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={selectedOwnerType === item ? "check-circle" : "circle-outline"}
+                      color={selectedOwnerType === item ? "#0267D2" : "#94A3B8"}
+                    />
+                  )}
+                  onPress={() => {
+                    setValue("type", item);
+                    setOwnerTypePickerVisible(false);
+                  }}
+                />
+              )}
+            />
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button onPress={() => setOwnerTypePickerVisible(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

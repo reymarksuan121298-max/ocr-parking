@@ -7,7 +7,6 @@ import {
   IconButton,
   List,
   Portal,
-  SegmentedButtons,
   Text,
   TextInput,
 } from "react-native-paper";
@@ -17,6 +16,8 @@ import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import type { OwnerType, VehicleOwner } from "@/types/database";
+
+const OWNER_TYPES: OwnerType[] = ["Student", "Faculty", "Staff", "Visitor"];
 
 const ownerSchema = z.object({
   fname: z.string().min(1, "First name is required"),
@@ -31,17 +32,22 @@ export default function OwnersScreen() {
   const [owners, setOwners] = useState<VehicleOwner[]>([]);
   const [dialogVisible, setDialogVisible] = useState(false);
   const [editing, setEditing] = useState<VehicleOwner | null>(null);
+  const [typePickerVisible, setTypePickerVisible] = useState(false);
   const { logAction } = useAuditLog();
 
   const {
     control,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<OwnerForm>({
     resolver: zodResolver(ownerSchema),
     defaultValues: { fname: "", mname: "", lname: "", contact_no: "", type: "Student" },
   });
+
+  const selectedType = watch("type");
 
   async function loadOwners() {
     const { data, error } = await supabase
@@ -74,22 +80,32 @@ export default function OwnersScreen() {
   }
 
   async function onSubmit(values: OwnerForm) {
+    const payload = {
+      fname: values.fname.trim(),
+      mname: values.mname?.trim() || null,
+      lname: values.lname.trim(),
+      contact_no: values.contact_no?.trim() || null,
+      type: values.type,
+    };
     if (editing) {
       const { error } = await (supabase
         .from("vehicle_owners") as any)
-        .update(values)
+        .update(payload)
         .eq("owner_id", editing.owner_id);
-      if (!error) await logAction("Update Owner", `Updated owner ${values.fname} ${values.lname}`);
+      if (!error) await logAction("Update Owner", `Updated owner ${payload.fname} ${payload.lname}`);
     } else {
-      const { error } = await (supabase.from("vehicle_owners") as any).insert(values);
-      if (!error) await logAction("Create Owner", `Registered owner ${values.fname} ${values.lname}`);
+      const { error } = await (supabase.from("vehicle_owners") as any).insert(payload);
+      if (!error) await logAction("Create Owner", `Created owner ${payload.fname} ${payload.lname}`);
     }
     setDialogVisible(false);
     loadOwners();
   }
 
   async function handleDelete(owner: VehicleOwner) {
-    const { error } = await supabase.from("vehicle_owners").delete().eq("owner_id", owner.owner_id);
+    const { error } = await supabase
+      .from("vehicle_owners")
+      .delete()
+      .eq("owner_id", owner.owner_id);
     if (!error) {
       await logAction("Delete Owner", `Removed owner ${owner.fname} ${owner.lname}`);
       loadOwners();
@@ -103,15 +119,15 @@ export default function OwnersScreen() {
         keyExtractor={(item) => item.owner_id}
         renderItem={({ item }) => (
           <List.Item
-            title={`${item.fname} ${item.lname}`}
+            title={`${item.fname} ${item.mname ? item.mname + " " : ""}${item.lname}`}
             description={`${item.type}${item.contact_no ? " · " + item.contact_no : ""}`}
             onPress={() => openEdit(item)}
+            left={(props) => <List.Icon {...props} icon="account" />}
             right={(props) => (
               <IconButton icon="delete-outline" iconColor={props.color} onPress={() => handleDelete(item)} />
             )}
           />
         )}
-        ItemSeparatorComponent={List.Item}
       />
 
       <FAB icon="plus" style={styles.fab} onPress={openCreate} label="Add Owner" />
@@ -119,7 +135,7 @@ export default function OwnersScreen() {
       <Portal>
         <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)}>
           <Dialog.Title>{editing ? "Edit Owner" : "New Vehicle Owner"}</Dialog.Title>
-          <Dialog.Content style={{ gap: 10 }}>
+          <Dialog.Content style={{ gap: 12 }}>
             <Controller
               control={control}
               name="fname"
@@ -171,26 +187,52 @@ export default function OwnersScreen() {
                 />
               )}
             />
-            <Controller
-              control={control}
-              name="type"
-              render={({ field }) => (
-                <SegmentedButtons
-                  value={field.value}
-                  onValueChange={(v) => field.onChange(v as OwnerType)}
-                  buttons={[
-                    { value: "Student", label: "Student" },
-                    { value: "Faculty", label: "Faculty" },
-                    { value: "Staff", label: "Staff" },
-                    { value: "Visitor", label: "Visitor" },
-                  ]}
-                />
-              )}
-            />
+
+            <View>
+              <Text variant="bodySmall" style={{ color: "#64748B", marginBottom: 4 }}>Owner Category</Text>
+              <Button
+                mode="outlined"
+                icon="menu-down"
+                contentStyle={{ flexDirection: "row-reverse", justifyContent: "space-between" }}
+                onPress={() => setTypePickerVisible(true)}
+              >
+                {selectedType}
+              </Button>
+            </View>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setDialogVisible(false)}>Cancel</Button>
             <Button onPress={handleSubmit(onSubmit)}>Save</Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Owner Category Picker Dialog */}
+        <Dialog visible={typePickerVisible} onDismiss={() => setTypePickerVisible(false)}>
+          <Dialog.Title>Select Category</Dialog.Title>
+          <Dialog.ScrollArea style={{ maxHeight: 260, paddingHorizontal: 0 }}>
+            <FlatList
+              data={OWNER_TYPES}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <List.Item
+                  title={item}
+                  left={(props) => (
+                    <List.Icon
+                      {...props}
+                      icon={selectedType === item ? "check-circle" : "circle-outline"}
+                      color={selectedType === item ? "#0267D2" : "#94A3B8"}
+                    />
+                  )}
+                  onPress={() => {
+                    setValue("type", item);
+                    setTypePickerVisible(false);
+                  }}
+                />
+              )}
+            />
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button onPress={() => setTypePickerVisible(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -200,5 +242,5 @@ export default function OwnersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
-  fab: { position: "absolute", right: 16, bottom: 16 },
+  fab: { position: "absolute", right: 16, bottom: 16, backgroundColor: "#0267D2" },
 });
