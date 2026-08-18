@@ -56,7 +56,7 @@ create index if not exists idx_vehicles_plate on public.vehicles(plate_number);
 create table if not exists public.parking_records (
   record_id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id),
-  vehicle_id uuid not null references public.vehicles(vehicle_id),
+  vehicle_id uuid not null references public.vehicles(vehicle_id) on delete cascade,
   time_in timestamptz not null default now(),
   time_out timestamptz,
   status parking_status not null default 'Parked',

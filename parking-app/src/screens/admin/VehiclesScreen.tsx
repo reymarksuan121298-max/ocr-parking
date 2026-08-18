@@ -118,11 +118,20 @@ export default function VehiclesScreen() {
 
   async function handleDelete() {
     if (!editing) return;
-    const { error } = await supabase.from("vehicles").delete().eq("vehicle_id", editing.vehicle_id);
-    if (!error) {
+    try {
+      // First delete associated parking records if any (in case FK cascade is not configured on remote db)
+      await supabase.from("parking_records").delete().eq("vehicle_id", editing.vehicle_id);
+
+      const { error } = await supabase.from("vehicles").delete().eq("vehicle_id", editing.vehicle_id);
+      if (error) {
+        console.warn("[handleDelete vehicle error]:", error.message);
+        return;
+      }
       await logAction("Delete Vehicle", `Deleted vehicle ${editing.plate_number}`);
       setDialogVisible(false);
       loadData();
+    } catch (err) {
+      console.warn("[handleDelete vehicle failed]:", err);
     }
   }
 
