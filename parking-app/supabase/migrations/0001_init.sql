@@ -128,6 +128,8 @@ drop policy if exists "logs_insert_own" on public.logs;
 create policy "logs_insert_own" on public.logs for insert with check (user_id = auth.uid());
 drop policy if exists "logs_admin_read" on public.logs;
 create policy "logs_admin_read" on public.logs for select using (public.is_admin());
+drop policy if exists "logs_admin_delete" on public.logs;
+create policy "logs_admin_delete" on public.logs for delete using (public.is_admin());
 
 -- ── Storage policies for plate-images bucket ────────────
 drop policy if exists "plate_images_authenticated_read" on storage.objects;
